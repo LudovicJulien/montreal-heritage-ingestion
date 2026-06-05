@@ -37,6 +37,10 @@ dependencies = [
     # NLP français (optionnel, pour extraction entités)
     # "spacy>=3.7",
 
+    # Settings & logging
+    "pydantic-settings>=2.2",
+    "loguru>=0.7",
+
     # Versioning données
     "dvc>=3.50",
 ]
@@ -50,6 +54,9 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.7",
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 100
