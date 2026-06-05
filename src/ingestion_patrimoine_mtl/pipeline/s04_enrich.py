@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 
 from ingestion_patrimoine_mtl.config import Settings
@@ -17,13 +19,13 @@ def _extract_entities(texts: list[str | None]) -> list[BuildingEntities]:
 
 
 def _build_enriched_record(
-    row: pd.Series,  # type: ignore[type-arg]
+    row: pd.Series,
     entities: BuildingEntities,
-) -> dict:  # type: ignore[type-arg]
+) -> dict[str, Any]:
     """Assemble l'objet final BuildingEnriched avec tous les champs pour le RAG engine."""
     raise NotImplementedError
 
 
-def _write_jsonl(records: list[dict], path: str) -> None:  # type: ignore[type-arg]
+def _write_jsonl(records: list[dict[str, Any]], path: str) -> None:
     """Écrit les enregistrements en JSONL (un objet JSON par ligne)."""
     raise NotImplementedError

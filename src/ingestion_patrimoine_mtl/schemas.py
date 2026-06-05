@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import pandera as pa
 from pandera.typing import Series
 
 
-class RawSchema(pa.DataFrameModel):
+class RawSchema(pa.DataFrameModel):  # type: ignore[misc]
     """Contrat DataFrame — sortie stage 01 · Ingest (buildings_raw.parquet)."""
 
     no_batiment: Series[str]
@@ -22,7 +20,7 @@ class RawSchema(pa.DataFrameModel):
         coerce = True
 
 
-class CleanSchema(pa.DataFrameModel):
+class CleanSchema(pa.DataFrameModel):  # type: ignore[misc]
     """Contrat DataFrame — sortie stage 02 · Clean (buildings_clean.parquet)."""
 
     no_batiment: Series[str]
@@ -36,7 +34,7 @@ class CleanSchema(pa.DataFrameModel):
         coerce = True
 
 
-class NormalizedSchema(pa.DataFrameModel):
+class NormalizedSchema(pa.DataFrameModel):  # type: ignore[misc]
     """Contrat DataFrame — sortie stage 03 · Normalize (buildings_normalized.parquet)."""
 
     no_batiment: Series[str]
@@ -45,8 +43,8 @@ class NormalizedSchema(pa.DataFrameModel):
     arrondissement: Series[str]
     # Coordonnées WGS84 — bbox île de Montréal
     # Note: vérifier si CENTRO_X/Y est Lambert NAD83 (EPSG:32198) dans le CSV source
-    centro_x: Optional[Series[float]] = pa.Field(nullable=True, ge=-74.1, le=-73.4)
-    centro_y: Optional[Series[float]] = pa.Field(nullable=True, ge=45.3, le=45.8)
+    centro_x: Series[float] = pa.Field(nullable=True, ge=-74.1, le=-73.4)
+    centro_y: Series[float] = pa.Field(nullable=True, ge=45.3, le=45.8)
     record_hash: Series[str]
 
     class Config:

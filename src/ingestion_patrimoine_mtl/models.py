@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,19 +10,19 @@ class BuildingRaw(BaseModel):
 
     no_batiment: str
     nom_historique: str
-    typologie: Optional[str] = None
-    no_civique: Optional[str] = None
-    civique_max: Optional[str] = None
-    type_de_voie: Optional[str] = None
+    typologie: str | None = None
+    no_civique: str | None = None
+    civique_max: str | None = None
+    type_de_voie: str | None = None
     voie: str
-    est_ouest: Optional[str] = None
+    est_ouest: str | None = None
     arrondissement: str
-    debut_des_travaux: Optional[int] = None
-    fin_des_travaux: Optional[int] = None
-    historique_sommaire: Optional[str] = None
-    lien: Optional[str] = None
-    centro_x: Optional[float] = None
-    centro_y: Optional[float] = None
+    debut_des_travaux: int | None = None
+    fin_des_travaux: int | None = None
+    historique_sommaire: str | None = None
+    lien: str | None = None
+    centro_x: float | None = None
+    centro_y: float | None = None
     # Métadonnées de traçabilité
     record_hash: str
     ingested_at: datetime
@@ -45,13 +44,13 @@ class BuildingEnriched(BaseModel):
 
     id: str
     nom_historique: str
-    typologie: Optional[str] = None
+    typologie: str | None = None
     adresse: str
     arrondissement: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    debut_travaux: Optional[int] = None
-    fin_travaux: Optional[int] = None
+    latitude: float | None = None
+    longitude: float | None = None
+    debut_travaux: int | None = None
+    fin_travaux: int | None = None
     text: str
     entities: BuildingEntities = Field(default_factory=BuildingEntities)
     record_hash: str
