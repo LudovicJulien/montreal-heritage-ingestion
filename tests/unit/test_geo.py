@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from ingestion_patrimoine_mtl.utils.geo import (
     MONTREAL_ARRONDISSEMENTS,
     is_in_montreal_bbox,

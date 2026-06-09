@@ -1,4 +1,5 @@
 """Tests unitaires — stage 03 · Normalize."""
+
 from __future__ import annotations
 
 import pytest

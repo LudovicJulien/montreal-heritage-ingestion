@@ -1,4 +1,5 @@
 """Tests unitaires — stage 02 · Clean."""
+
 from __future__ import annotations
 
 import pytest

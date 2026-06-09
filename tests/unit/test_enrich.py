@@ -1,4 +1,5 @@
 """Tests unitaires — stage 04 · Enrich (NER spaCy)."""
+
 from __future__ import annotations
 
 import pytest

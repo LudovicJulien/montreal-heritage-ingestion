@@ -1,4 +1,5 @@
 """Test d'intégration — pipeline complet sur un échantillon de 10 enregistrements."""
+
 from __future__ import annotations
 
 import pytest
