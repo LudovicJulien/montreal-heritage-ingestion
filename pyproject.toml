@@ -73,6 +73,14 @@ python_version = "3.11"
 strict = true
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["tests.*", "scripts.*"]
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["ingestion_patrimoine_mtl.schemas"]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=src --cov-report=term-missing -q"

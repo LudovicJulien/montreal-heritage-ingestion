@@ -12,4 +12,8 @@ repos:
       - id: mypy
         additional_dependencies:
           - pydantic>=2.7
+          - pydantic-settings>=2.2
           - pandas-stubs>=2.2
+          - pandera>=0.18
+          - types-requests
+          - pytest>=7
