@@ -1,0 +1,32 @@
+stages:
+  s01_ingest:
+    cmd: python -m ingestion_patrimoine_mtl.pipeline.s01_ingest
+    deps:
+      - rawData/edifices_patrimoine.csv
+      - src/ingestion_patrimoine_mtl/pipeline/s01_ingest.py
+    outs:
+      - data/01_raw/buildings_raw.parquet
+
+  s02_clean:
+    cmd: python -m ingestion_patrimoine_mtl.pipeline.s02_clean
+    deps:
+      - data/01_raw/buildings_raw.parquet
+      - src/ingestion_patrimoine_mtl/pipeline/s02_clean.py
+    outs:
+      - data/02_clean/buildings_clean.parquet
+
+  s03_normalize:
+    cmd: python -m ingestion_patrimoine_mtl.pipeline.s03_normalize
+    deps:
+      - data/02_clean/buildings_clean.parquet
+      - src/ingestion_patrimoine_mtl/pipeline/s03_normalize.py
+    outs:
+      - data/03_normalized/buildings_normalized.parquet
+
+  s04_enrich:
+    cmd: python -m ingestion_patrimoine_mtl.pipeline.s04_enrich
+    deps:
+      - data/03_normalized/buildings_normalized.parquet
+      - src/ingestion_patrimoine_mtl/pipeline/s04_enrich.py
+    outs:
+      - data/04_enriched/buildings_enriched.jsonl
