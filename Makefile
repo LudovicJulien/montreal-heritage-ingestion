@@ -1,4 +1,7 @@
-.PHONY: install lint test run
+.PHONY: install lint test run download
+
+download:
+	python scripts/download_raw_data.py
 
 install:
 	pip install -e ".[dev]"
