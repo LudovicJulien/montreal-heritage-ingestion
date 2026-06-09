@@ -34,6 +34,9 @@ data/02_clean/*.parquet
 data/03_normalized/*.parquet
 data/04_enriched/*.jsonl
 
+# Raw data (reproductible via `make download`)
+rawData/
+
 # OS
 .DS_Store
 Thumbs.db
