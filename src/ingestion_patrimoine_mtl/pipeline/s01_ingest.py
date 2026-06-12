@@ -7,7 +7,19 @@ from ingestion_patrimoine_mtl.config import Settings
 
 def run(cfg: Settings) -> pd.DataFrame:
     """Charge le CSV source, hash les lignes et écrit buildings_raw.parquet."""
+    _ensure_source_exists(cfg)
     raise NotImplementedError
+
+
+def _ensure_source_exists(cfg: Settings) -> None:
+    """Fail-fast : interrompt le pipeline si le CSV source est absent."""
+    if not cfg.source_path.is_file():
+        raise FileNotFoundError(
+            f"CSV source introuvable : '{cfg.source_path.resolve()}'. "
+            "Lancez `make download` (ou `python scripts/download_raw_data.py`) "
+            "pour récupérer les données brutes, ou ajustez INGESTION_RAW_DATA_DIR "
+            "/ INGESTION_SOURCE_FILE dans votre .env."
+        )
 
 
 def _detect_encoding(path: str) -> str:
