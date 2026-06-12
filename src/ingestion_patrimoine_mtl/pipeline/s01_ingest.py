@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import chardet
 import pandas as pd
 
 from ingestion_patrimoine_mtl.config import Settings
+
+# Échantillon suffisant pour une détection fiable sans lire tout le fichier.
+_ENCODING_SAMPLE_SIZE = 100_000
 
 
 def run(cfg: Settings) -> pd.DataFrame:
@@ -22,9 +28,21 @@ def _ensure_source_exists(cfg: Settings) -> None:
         )
 
 
-def _detect_encoding(path: str) -> str:
-    """Détecte l'encodage du fichier source avec chardet."""
-    raise NotImplementedError
+def _detect_encoding(path: Path) -> str:
+    """Détecte l'encodage du fichier source (utf-8 validé d'abord, sinon chardet)."""
+    with path.open("rb") as fh:
+        sample = fh.read(_ENCODING_SAMPLE_SIZE)
+    try:
+        # utf-8 est auto-validant : un décodage strict réussi est fiable,
+        # alors que chardet reste probabiliste sur un petit échantillon.
+        sample.decode("utf-8")
+        return "utf-8"
+    except UnicodeDecodeError as exc:
+        if exc.start >= len(sample) - 3:
+            # Erreur uniquement sur les derniers octets : caractère
+            # multi-octets tronqué par l'échantillonnage, pas un faux utf-8.
+            return "utf-8"
+    return chardet.detect(sample).get("encoding") or "latin-1"
 
 
 def _strip_column_spaces(df: pd.DataFrame) -> pd.DataFrame:
