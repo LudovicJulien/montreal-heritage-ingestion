@@ -4,17 +4,44 @@ from pathlib import Path
 
 import chardet
 import pandas as pd
+from tqdm import tqdm
 
 from ingestion_patrimoine_mtl.config import Settings
 
 # Échantillon suffisant pour une détection fiable sans lire tout le fichier.
 _ENCODING_SAMPLE_SIZE = 100_000
 
+# Petit volume (~2 700 lignes) : des chunks de 500 donnent une progression
+# visible sans coût de concaténation notable.
+_CSV_CHUNK_SIZE = 500
+
 
 def run(cfg: Settings) -> pd.DataFrame:
     """Charge le CSV source, hash les lignes et écrit buildings_raw.parquet."""
     _ensure_source_exists(cfg)
-    raise NotImplementedError
+    encoding = _detect_encoding(cfg.source_path)
+    return _load_csv(cfg.source_path, encoding)
+
+
+def _load_csv(path: Path, encoding: str) -> pd.DataFrame:
+    """Charge le CSV par chunks avec barre de progression tqdm.
+
+    Tout est lu en ``dtype=str`` : l'ingestion préserve la fidélité brute
+    (zéros de tête des identifiants, années non castées) ; le typage est la
+    responsabilité de l'étape normalize.
+    """
+    chunks: list[pd.DataFrame] = []
+    with (
+        pd.read_csv(path, encoding=encoding, dtype=str, chunksize=_CSV_CHUNK_SIZE) as reader,
+        tqdm(desc=f"Ingestion {path.name}", unit=" lignes") as progress,
+    ):
+        for chunk in reader:
+            chunks.append(chunk)
+            progress.update(len(chunk))
+    if not chunks:
+        # Fichier avec en-tête seul : relire sans chunks pour garder les colonnes.
+        return pd.read_csv(path, encoding=encoding, dtype=str)
+    return pd.concat(chunks, ignore_index=True)
 
 
 def _ensure_source_exists(cfg: Settings) -> None:
