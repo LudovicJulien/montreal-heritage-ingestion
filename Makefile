@@ -8,9 +8,10 @@ install:
 	pre-commit install
 
 lint:
-	ruff check src/
-	ruff format --check src/
-	mypy src/
+	ruff check --fix src/ tests/
+	ruff format src/ tests/
+	mypy src/ tests/
+
 
 test:
 	pytest
