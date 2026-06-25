@@ -9,6 +9,7 @@ from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.pipeline.s01_ingest import (
     _detect_encoding,
     _idempotence_filter,
+    _normalize_column_names,
     _strip_column_spaces,
     run,
 )
@@ -77,6 +78,32 @@ class TestStripColumnSpaces:
         df = pd.DataFrame({" NOM HISTORIQUE ": [1]})
         result = _strip_column_spaces(df)
         assert list(result.columns) == ["NOM HISTORIQUE"]
+
+
+class TestNormalizeColumnNames:
+    def test_uppercase_columns_lowercased(self) -> None:
+        """Column names in all-caps are converted to lowercase."""
+        df = pd.DataFrame({"NOM_HISTORIQUE": [1], "ARRONDISSEMENT": [2]})
+        result = _normalize_column_names(df)
+        assert list(result.columns) == ["nom_historique", "arrondissement"]
+
+    def test_mixed_case_columns_lowercased(self) -> None:
+        """Column names in mixed case are fully lowercased."""
+        df = pd.DataFrame({"NomHistorique": [1], "Arrondissement": [2]})
+        result = _normalize_column_names(df)
+        assert list(result.columns) == ["nomhistorique", "arrondissement"]
+
+    def test_already_lowercase_columns_unchanged(self) -> None:
+        """Column names already in lowercase pass through untouched."""
+        df = pd.DataFrame({"nom_historique": [1], "arrondissement": [2]})
+        result = _normalize_column_names(df)
+        assert list(result.columns) == ["nom_historique", "arrondissement"]
+
+    def test_strip_then_normalize_pipeline(self) -> None:
+        """Applying strip then normalize handles ' NOM_HISTORIQUE ' correctly."""
+        df = pd.DataFrame({" NOM_HISTORIQUE ": [1]})
+        result = _normalize_column_names(_strip_column_spaces(df))
+        assert list(result.columns) == ["nom_historique"]
 
 
 def _make_df(*hashes: str) -> pd.DataFrame:

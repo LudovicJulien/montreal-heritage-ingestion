@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class BuildingRaw(BaseModel):
     """Raw record from the source CSV (stage 01 · Ingest)."""
 
-    no_batiment: str
+    identifiant_batiment: str
     nom_historique: str
     typologie: str | None = None
     no_civique: str | None = None

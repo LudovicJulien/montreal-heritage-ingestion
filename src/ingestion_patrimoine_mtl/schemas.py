@@ -7,12 +7,16 @@ from pandera.typing import Series
 
 
 class RawSchema(pa.DataFrameModel):
-    """DataFrame contract — stage 01 · Ingest output (buildings_raw.parquet)."""
+    """DataFrame contract — stage 01 · Ingest output (buildings_raw.parquet).
 
-    no_batiment: Series[str]
-    nom_historique: Series[str]
-    voie: Series[str]
-    arrondissement: Series[str]
+    Source-derived columns are nullable: raw ingestion preserves the CSV as-is
+    without rejecting records. Pipeline-generated columns are always non-null.
+    """
+
+    identifiant_batiment: Series[str] = pa.Field(nullable=True)
+    nom_historique: Series[str] = pa.Field(nullable=True)
+    voie: Series[str] = pa.Field(nullable=True)
+    arrondissement: Series[str] = pa.Field(nullable=True)
     record_hash: Series[str] = pa.Field(str_length={"min_value": 64, "max_value": 64})
     ingested_at: Series[datetime]
     source_file: Series[str]
@@ -26,7 +30,7 @@ class RawSchema(pa.DataFrameModel):
 class CleanSchema(pa.DataFrameModel):
     """DataFrame contract — stage 02 · Clean output (buildings_clean.parquet)."""
 
-    no_batiment: Series[str]
+    identifiant_batiment: Series[str]
     nom_historique: Series[str]
     voie: Series[str]
     arrondissement: Series[str]
@@ -40,7 +44,7 @@ class CleanSchema(pa.DataFrameModel):
 class NormalizedSchema(pa.DataFrameModel):
     """DataFrame contract — stage 03 · Normalize output (buildings_normalized.parquet)."""
 
-    no_batiment: Series[str]
+    identifiant_batiment: Series[str]
     nom_historique: Series[str]
     voie: Series[str]
     arrondissement: Series[str]

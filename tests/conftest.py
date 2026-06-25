@@ -24,7 +24,7 @@ def sample_raw_df() -> pd.DataFrame:
     """Minimal DataFrame simulating 3 raw records (stage 01)."""
     return pd.DataFrame(
         {
-            "no_batiment": ["0039-27-4599-00", "0039-27-4600-00", "0039-27-4601-00"],
+            "identifiant_batiment": ["0039-27-4599-00", "0039-27-4600-00", "0039-27-4601-00"],
             "nom_historique": [
                 "Maisons-magasins Jacob-De Witt I",
                 "Édifice Aldred",

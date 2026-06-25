@@ -31,6 +31,7 @@ def run(cfg: Settings) -> pd.DataFrame:
 
     df = _load_csv(cfg.source_path, encoding)
     df = _strip_column_spaces(df)
+    df = _normalize_column_names(df)
     df = _add_row_hashes(df)
     loaded_rows = len(df)
     logger.info("Loaded {rows} rows from {source}", rows=loaded_rows, source=cfg.source_path.name)
@@ -106,6 +107,12 @@ def _detect_encoding(path: Path) -> str:
 def _strip_column_spaces(df: pd.DataFrame) -> pd.DataFrame:
     """Strip leading/trailing whitespace from column names (e.g. 'NOM_HISTORIQUE ')."""
     df.columns = df.columns.str.strip()
+    return df
+
+
+def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Lowercase all column names so downstream schemas use a consistent convention."""
+    df.columns = df.columns.str.lower()
     return df
 
 
