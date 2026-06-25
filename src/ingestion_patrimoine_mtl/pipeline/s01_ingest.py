@@ -20,7 +20,8 @@ def run(cfg: Settings) -> pd.DataFrame:
     """Charge le CSV source, hash les lignes et écrit buildings_raw.parquet."""
     _ensure_source_exists(cfg)
     encoding = _detect_encoding(cfg.source_path)
-    return _load_csv(cfg.source_path, encoding)
+    df = _load_csv(cfg.source_path, encoding)
+    return _strip_column_spaces(df)
 
 
 def _load_csv(path: Path, encoding: str) -> pd.DataFrame:
@@ -74,7 +75,8 @@ def _detect_encoding(path: Path) -> str:
 
 def _strip_column_spaces(df: pd.DataFrame) -> pd.DataFrame:
     """Supprime les espaces parasites dans les noms de colonnes (ex. 'NOM_HISTORIQUE ')."""
-    raise NotImplementedError
+    df.columns = df.columns.str.strip()
+    return df
 
 
 def _add_metadata(df: pd.DataFrame, cfg: Settings) -> pd.DataFrame:
