@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 import pandera as pa
 from pandera.typing import Series
 
@@ -12,6 +14,7 @@ class RawSchema(pa.DataFrameModel):
     voie: Series[str]
     arrondissement: Series[str]
     record_hash: Series[str] = pa.Field(str_length={"min_value": 64, "max_value": 64})
+    ingested_at: Series[datetime]
     source_file: Series[str]
     pipeline_version: Series[str]
 

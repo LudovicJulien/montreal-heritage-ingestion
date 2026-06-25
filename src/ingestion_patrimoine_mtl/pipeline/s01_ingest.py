@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import chardet
@@ -23,7 +24,8 @@ def run(cfg: Settings) -> pd.DataFrame:
     encoding = _detect_encoding(cfg.source_path)
     df = _load_csv(cfg.source_path, encoding)
     df = _strip_column_spaces(df)
-    return _add_row_hashes(df)
+    df = _add_row_hashes(df)
+    return _add_metadata(df, cfg)
 
 
 def _load_csv(path: Path, encoding: str) -> pd.DataFrame:
@@ -94,8 +96,12 @@ def _add_row_hashes(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _add_metadata(df: pd.DataFrame, cfg: Settings) -> pd.DataFrame:
-    """Add record_hash, ingested_at (UTC), source_file, and pipeline_version columns."""
-    raise NotImplementedError
+    """Append ingested_at (UTC), source_file, and pipeline_version columns."""
+    df = df.copy()
+    df["ingested_at"] = datetime.now(UTC)
+    df["source_file"] = cfg.source_file
+    df["pipeline_version"] = cfg.pipeline_version
+    return df
 
 
 def _idempotence_filter(df: pd.DataFrame, previous_out: str) -> pd.DataFrame:
