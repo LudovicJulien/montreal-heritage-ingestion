@@ -3,12 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
+from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.pipeline.s01_ingest import (
     _detect_encoding,
     _idempotence_filter,
     _strip_column_spaces,
+    run,
 )
+from ingestion_patrimoine_mtl.schemas import RawSchema
 
 
 class TestDetectEncoding:
@@ -127,3 +131,39 @@ class TestIdempotenceFilter:
         df = _make_df("aaa", "bbb", "ccc")
         result = _idempotence_filter(df, parquet_path)
         assert list(result.index) == list(range(len(result)))
+
+
+@pytest.fixture
+def source_csv(cfg: Settings, sample_raw_df: pd.DataFrame) -> Path:
+    """Write sample_raw_df as a CSV to the configured source path and return it."""
+    cfg.source_path.parent.mkdir(parents=True, exist_ok=True)
+    sample_raw_df.to_csv(cfg.source_path, index=False)
+    return Path(cfg.source_path)
+
+
+class TestRunIngest:
+    def test_parquet_written_to_expected_path(self, cfg: Settings, source_csv: Path) -> None:
+        """run() creates the Parquet file at the path returned by cfg.stage_01_out."""
+        run(cfg)
+        assert cfg.stage_01_out.is_file()
+
+    def test_parquet_passes_raw_schema_validation(self, cfg: Settings, source_csv: Path) -> None:
+        """The output Parquet satisfies all RawSchema constraints, including hash length."""
+        run(cfg)
+        df = pd.read_parquet(cfg.stage_01_out)
+        RawSchema.validate(df)
+
+    def test_parquet_row_count_matches_source(self, cfg: Settings, source_csv: Path) -> None:
+        """All source records appear in the output — no rows are silently dropped."""
+        run(cfg)
+        result = pd.read_parquet(cfg.stage_01_out)
+        source = pd.read_csv(source_csv, dtype=str)
+        assert len(result) == len(source)
+
+    def test_metadata_columns_are_non_null(self, cfg: Settings, source_csv: Path) -> None:
+        """ingested_at, source_file, and pipeline_version are populated for every row."""
+        run(cfg)
+        df = pd.read_parquet(cfg.stage_01_out)
+        for col in ("ingested_at", "source_file", "pipeline_version"):
+            assert col in df.columns, f"missing column: {col}"
+            assert df[col].notna().all(), f"null values found in column: {col}"
