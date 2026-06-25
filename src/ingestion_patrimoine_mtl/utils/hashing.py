@@ -7,9 +7,9 @@ import pandas as pd
 
 
 def compute_row_hash(row: pd.Series) -> str:
-    """Calcule un SHA-256 déterministe pour une ligne de DataFrame.
+    """Compute a deterministic SHA-256 hash for a single DataFrame row.
 
-    Basé sur la sérialisation JSON triée par clé, indépendant de l'ordre des colonnes.
+    Based on key-sorted JSON serialization, independent of column order.
     """
     serialized = json.dumps(
         {k: (str(v) if v is not None else None) for k, v in row.items()},
@@ -20,5 +20,5 @@ def compute_row_hash(row: pd.Series) -> str:
 
 
 def compute_dataframe_hashes(df: pd.DataFrame) -> pd.Series:
-    """Calcule le SHA-256 de chaque ligne d'un DataFrame."""
+    """Compute the SHA-256 hash of every row in a DataFrame."""
     return df.apply(compute_row_hash, axis=1)

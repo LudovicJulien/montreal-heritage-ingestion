@@ -20,7 +20,7 @@ def cfg(tmp_path: Path) -> Settings:
 
 @pytest.fixture
 def sample_raw_df() -> pd.DataFrame:
-    """DataFrame minimal simulant 3 enregistrements bruts (stage 01)."""
+    """Minimal DataFrame simulating 3 raw records (stage 01)."""
     return pd.DataFrame(
         {
             "no_batiment": ["0039-27-4599-00", "0039-27-4600-00", "0039-27-4601-00"],

@@ -5,7 +5,7 @@ from pandera.typing import Series
 
 
 class RawSchema(pa.DataFrameModel):
-    """Contrat DataFrame — sortie stage 01 · Ingest (buildings_raw.parquet)."""
+    """DataFrame contract — stage 01 · Ingest output (buildings_raw.parquet)."""
 
     no_batiment: Series[str]
     nom_historique: Series[str]
@@ -21,7 +21,7 @@ class RawSchema(pa.DataFrameModel):
 
 
 class CleanSchema(pa.DataFrameModel):
-    """Contrat DataFrame — sortie stage 02 · Clean (buildings_clean.parquet)."""
+    """DataFrame contract — stage 02 · Clean output (buildings_clean.parquet)."""
 
     no_batiment: Series[str]
     nom_historique: Series[str]
@@ -35,14 +35,14 @@ class CleanSchema(pa.DataFrameModel):
 
 
 class NormalizedSchema(pa.DataFrameModel):
-    """Contrat DataFrame — sortie stage 03 · Normalize (buildings_normalized.parquet)."""
+    """DataFrame contract — stage 03 · Normalize output (buildings_normalized.parquet)."""
 
     no_batiment: Series[str]
     nom_historique: Series[str]
     voie: Series[str]
     arrondissement: Series[str]
-    # Coordonnées WGS84 — bbox île de Montréal
-    # Note : vérifier si CENTRO_X/Y est Lambert NAD83 (EPSG:32198) dans le CSV source
+    # WGS84 coordinates — Montreal Island bounding box
+    # Note: check whether CENTRO_X/Y is Lambert NAD83 (EPSG:32198) in the source CSV
     centro_x: Series[float] = pa.Field(nullable=True, ge=-74.1, le=-73.4)
     centro_y: Series[float] = pa.Field(nullable=True, ge=45.3, le=45.8)
     record_hash: Series[str]
