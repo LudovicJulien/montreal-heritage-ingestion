@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
 from ingestion_patrimoine_mtl.config import Settings
 
 

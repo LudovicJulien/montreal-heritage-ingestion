@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+
 from ingestion_patrimoine_mtl.utils.hashing import compute_dataframe_hashes, compute_row_hash
 
 

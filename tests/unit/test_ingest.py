@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ingestion_patrimoine_mtl.pipeline.s01_ingest import _detect_encoding
+import pandas as pd
+
+from ingestion_patrimoine_mtl.pipeline.s01_ingest import _detect_encoding, _strip_column_spaces
 
 
 class TestDetectEncoding:
@@ -28,3 +30,42 @@ class TestDetectEncoding:
         encoding = _detect_encoding(csv_file)
         decoded = csv_file.read_bytes().decode(encoding)
         assert "H" in decoded and "Montr" in decoded
+
+
+class TestStripColumnSpaces:
+    def test_trailing_whitespace_stripped(self) -> None:
+        """Column names with trailing spaces are stripped to their clean form."""
+        df = pd.DataFrame({"NOM_HISTORIQUE ": [1], "ADRESSE ": [2]})
+        result = _strip_column_spaces(df)
+        assert list(result.columns) == ["NOM_HISTORIQUE", "ADRESSE"]
+
+    def test_leading_whitespace_stripped(self) -> None:
+        """Column names with leading spaces are stripped to their clean form."""
+        df = pd.DataFrame({" NOM_HISTORIQUE": [1], " ADRESSE": [2]})
+        result = _strip_column_spaces(df)
+        assert list(result.columns) == ["NOM_HISTORIQUE", "ADRESSE"]
+
+    def test_leading_and_trailing_whitespace_stripped(self) -> None:
+        """Column names with both leading and trailing spaces are fully stripped."""
+        df = pd.DataFrame({"  NOM_HISTORIQUE  ": [1]})
+        result = _strip_column_spaces(df)
+        assert list(result.columns) == ["NOM_HISTORIQUE"]
+
+    def test_clean_column_names_unchanged(self) -> None:
+        """Column names without surrounding whitespace pass through untouched."""
+        df = pd.DataFrame({"NOM_HISTORIQUE": [1], "ADRESSE": [2]})
+        result = _strip_column_spaces(df)
+        assert list(result.columns) == ["NOM_HISTORIQUE", "ADRESSE"]
+
+    def test_empty_dataframe_columns_stripped(self) -> None:
+        """Column names are stripped even when the DataFrame contains no rows."""
+        df = pd.DataFrame({"NOM ": pd.Series([], dtype=str), " ADRESSE": pd.Series([], dtype=str)})
+        result = _strip_column_spaces(df)
+        assert list(result.columns) == ["NOM", "ADRESSE"]
+        assert len(result) == 0
+
+    def test_internal_whitespace_preserved(self) -> None:
+        """Spaces inside a column name are not removed — only leading/trailing ones are."""
+        df = pd.DataFrame({" NOM HISTORIQUE ": [1]})
+        result = _strip_column_spaces(df)
+        assert list(result.columns) == ["NOM HISTORIQUE"]
