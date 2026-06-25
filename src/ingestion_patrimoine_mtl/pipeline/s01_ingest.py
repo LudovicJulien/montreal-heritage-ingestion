@@ -20,7 +20,7 @@ _CSV_CHUNK_SIZE = 500
 
 
 def run(cfg: Settings) -> pd.DataFrame:
-    """Load the source CSV, hash every row, and write buildings_raw.parquet."""
+    """Load the source CSV, hash every row, validate against RawSchema, and write Parquet."""
     _ensure_source_exists(cfg)
     encoding = _detect_encoding(cfg.source_path)
     df = _load_csv(cfg.source_path, encoding)
@@ -28,7 +28,9 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _add_row_hashes(df)
     df = _idempotence_filter(df, cfg.stage_01_out)
     df = _add_metadata(df, cfg)
-    return _validate_schema(df)
+    df = _validate_schema(df)
+    _write_parquet(df, cfg.stage_01_out)
+    return df
 
 
 def _load_csv(path: Path, encoding: str) -> pd.DataFrame:
@@ -105,6 +107,15 @@ def _add_metadata(df: pd.DataFrame, cfg: Settings) -> pd.DataFrame:
     df["source_file"] = cfg.source_file
     df["pipeline_version"] = cfg.pipeline_version
     return df
+
+
+def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    """Write the validated DataFrame to a snappy-compressed Parquet file.
+
+    The parent directory is created automatically if it does not yet exist.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, compression="snappy", index=False)
 
 
 def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
