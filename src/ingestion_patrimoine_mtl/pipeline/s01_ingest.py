@@ -8,6 +8,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.schemas import RawSchema
 from ingestion_patrimoine_mtl.utils.hashing import compute_dataframe_hashes
 
 # Sample large enough for reliable detection without reading the whole file.
@@ -26,7 +27,8 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _strip_column_spaces(df)
     df = _add_row_hashes(df)
     df = _idempotence_filter(df, cfg.stage_01_out)
-    return _add_metadata(df, cfg)
+    df = _add_metadata(df, cfg)
+    return _validate_schema(df)
 
 
 def _load_csv(path: Path, encoding: str) -> pd.DataFrame:
@@ -103,6 +105,11 @@ def _add_metadata(df: pd.DataFrame, cfg: Settings) -> pd.DataFrame:
     df["source_file"] = cfg.source_file
     df["pipeline_version"] = cfg.pipeline_version
     return df
+
+
+def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate the DataFrame against RawSchema; raises SchemaError on any violation."""
+    return RawSchema.validate(df)
 
 
 def _idempotence_filter(df: pd.DataFrame, previous_out: Path) -> pd.DataFrame:
