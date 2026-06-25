@@ -25,6 +25,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _load_csv(cfg.source_path, encoding)
     df = _strip_column_spaces(df)
     df = _add_row_hashes(df)
+    df = _idempotence_filter(df, cfg.stage_01_out)
     return _add_metadata(df, cfg)
 
 
@@ -104,6 +105,14 @@ def _add_metadata(df: pd.DataFrame, cfg: Settings) -> pd.DataFrame:
     return df
 
 
-def _idempotence_filter(df: pd.DataFrame, previous_out: str) -> pd.DataFrame:
-    """Return only rows whose hash differs from the previous run."""
-    raise NotImplementedError
+def _idempotence_filter(df: pd.DataFrame, previous_out: Path) -> pd.DataFrame:
+    """Return only rows whose record_hash is absent from the previous run's output.
+
+    On the first run, when no previous Parquet exists, all rows are returned unchanged.
+    """
+    if not previous_out.is_file():
+        return df
+    previous = pd.read_parquet(previous_out, columns=["record_hash"])
+    known_hashes: set[str] = set(previous["record_hash"].tolist())
+    mask = ~df["record_hash"].isin(known_hashes)
+    return df[mask].reset_index(drop=True)
