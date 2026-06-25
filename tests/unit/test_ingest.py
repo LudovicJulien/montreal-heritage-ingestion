@@ -167,3 +167,8 @@ class TestRunIngest:
         for col in ("ingested_at", "source_file", "pipeline_version"):
             assert col in df.columns, f"missing column: {col}"
             assert df[col].notna().all(), f"null values found in column: {col}"
+
+    def test_missing_source_csv_raises_file_not_found(self, cfg: Settings) -> None:
+        """run() raises FileNotFoundError immediately when the source CSV does not exist."""
+        with pytest.raises(FileNotFoundError, match="Source CSV not found"):
+            run(cfg)
