@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from ingestion_patrimoine_mtl.pipeline.s01_ingest import _detect_encoding, _strip_column_spaces
+from ingestion_patrimoine_mtl.pipeline.s01_ingest import (
+    _detect_encoding,
+    _idempotence_filter,
+    _strip_column_spaces,
+)
 
 
 class TestDetectEncoding:
@@ -69,3 +73,57 @@ class TestStripColumnSpaces:
         df = pd.DataFrame({" NOM HISTORIQUE ": [1]})
         result = _strip_column_spaces(df)
         assert list(result.columns) == ["NOM HISTORIQUE"]
+
+
+def _make_df(*hashes: str) -> pd.DataFrame:
+    """Build a minimal DataFrame with a record_hash column for idempotence tests."""
+    return pd.DataFrame({"record_hash": list(hashes), "value": range(len(hashes))})
+
+
+class TestIdempotenceFilter:
+    def test_no_previous_parquet_returns_all_rows(self, tmp_path: Path) -> None:
+        """On first run (no previous output), every row is returned unchanged."""
+        df = _make_df("aaa", "bbb", "ccc")
+        result = _idempotence_filter(df, tmp_path / "nonexistent.parquet")
+        assert len(result) == 3
+        assert list(result["record_hash"]) == ["aaa", "bbb", "ccc"]
+
+    def test_all_hashes_known_returns_empty(self, tmp_path: Path) -> None:
+        """When every row was already processed, the filter returns an empty DataFrame."""
+        previous = pd.DataFrame({"record_hash": ["aaa", "bbb"]})
+        parquet_path = tmp_path / "previous.parquet"
+        previous.to_parquet(parquet_path, index=False)
+
+        df = _make_df("aaa", "bbb")
+        result = _idempotence_filter(df, parquet_path)
+        assert len(result) == 0
+
+    def test_partial_overlap_returns_only_new_rows(self, tmp_path: Path) -> None:
+        """Only rows whose hash is absent from the previous output are kept."""
+        previous = pd.DataFrame({"record_hash": ["aaa", "bbb"]})
+        parquet_path = tmp_path / "previous.parquet"
+        previous.to_parquet(parquet_path, index=False)
+
+        df = _make_df("aaa", "bbb", "ccc", "ddd")
+        result = _idempotence_filter(df, parquet_path)
+        assert list(result["record_hash"]) == ["ccc", "ddd"]
+
+    def test_no_hash_overlap_returns_all_rows(self, tmp_path: Path) -> None:
+        """When no row matches the previous output, the entire DataFrame is returned."""
+        previous = pd.DataFrame({"record_hash": ["xxx", "yyy"]})
+        parquet_path = tmp_path / "previous.parquet"
+        previous.to_parquet(parquet_path, index=False)
+
+        df = _make_df("aaa", "bbb")
+        result = _idempotence_filter(df, parquet_path)
+        assert list(result["record_hash"]) == ["aaa", "bbb"]
+
+    def test_filtered_result_has_reset_index(self, tmp_path: Path) -> None:
+        """The returned DataFrame always has a clean 0-based integer index."""
+        previous = pd.DataFrame({"record_hash": ["aaa"]})
+        parquet_path = tmp_path / "previous.parquet"
+        previous.to_parquet(parquet_path, index=False)
+
+        df = _make_df("aaa", "bbb", "ccc")
+        result = _idempotence_filter(df, parquet_path)
+        assert list(result.index) == list(range(len(result)))
