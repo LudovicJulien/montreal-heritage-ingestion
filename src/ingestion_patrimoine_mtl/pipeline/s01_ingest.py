@@ -7,6 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.utils.hashing import compute_dataframe_hashes
 
 # Échantillon suffisant pour une détection fiable sans lire tout le fichier.
 _ENCODING_SAMPLE_SIZE = 100_000
@@ -21,7 +22,8 @@ def run(cfg: Settings) -> pd.DataFrame:
     _ensure_source_exists(cfg)
     encoding = _detect_encoding(cfg.source_path)
     df = _load_csv(cfg.source_path, encoding)
-    return _strip_column_spaces(df)
+    df = _strip_column_spaces(df)
+    return _add_row_hashes(df)
 
 
 def _load_csv(path: Path, encoding: str) -> pd.DataFrame:
@@ -76,6 +78,18 @@ def _detect_encoding(path: Path) -> str:
 def _strip_column_spaces(df: pd.DataFrame) -> pd.DataFrame:
     """Supprime les espaces parasites dans les noms de colonnes (ex. 'NOM_HISTORIQUE ')."""
     df.columns = df.columns.str.strip()
+    return df
+
+
+def _add_row_hashes(df: pd.DataFrame) -> pd.DataFrame:
+    """Calcule un SHA-256 déterministe par ligne et l'insère en colonne record_hash.
+
+    Le hash est calculé sur les colonnes source brutes uniquement, avant l'ajout
+    des colonnes de métadonnées pipeline, pour que record_hash reflète fidèlement
+    le contenu de l'enregistrement CSV d'origine.
+    """
+    df = df.copy()
+    df["record_hash"] = compute_dataframe_hashes(df)
     return df
 
 
