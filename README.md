@@ -70,6 +70,16 @@ data/04_enriched/buildings_enriched.jsonl
 - **SHA-256 idempotency** — records already processed on a previous run are skipped without re-computation
 - **DVC pipeline** — `dvc repro` re-runs only the stages downstream of what changed; the full 4-stage run is a single command
 
+### Architecture Decision Records
+
+The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
+
+| ADR | Decision |
+|-----|----------|
+| [ADR-001](docs/adr/ADR-001-four-stage-pipeline-architecture.md) | Why four stages instead of one monolithic script |
+| [ADR-002](docs/adr/ADR-002-dvc-for-pipeline-orchestration.md) | Why DVC over Airflow, Bash scripts, or Git LFS |
+| [ADR-003](docs/adr/ADR-003-sha256-row-hashing-for-idempotence.md) | Why SHA-256 per-row hashing for idempotent re-runs |
+
 ---
 
 ## Data Quality Challenges (and how each stage handles them)
@@ -113,6 +123,20 @@ Each record in `buildings_enriched.jsonl` is a self-contained building object:
   "ingested_at": "2026-06-09T14:00:00Z",
   "pipeline_version": "0.1.0"
 }
+```
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/LudovicJulien/montreal-heritage-ingestion.git
+cd montreal-heritage-ingestion
+make install      # install deps + pre-commit hooks
+make download     # fetch raw CSV from Données Montréal
+dvc repro         # run all 4 stages (skips unchanged ones)
+make lint         # ruff + mypy strict
+make test         # pytest with coverage report
 ```
 
 ---
