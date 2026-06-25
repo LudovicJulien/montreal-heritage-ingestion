@@ -5,6 +5,7 @@ from pathlib import Path
 
 import chardet
 import pandas as pd
+from loguru import logger
 from tqdm import tqdm
 
 from ingestion_patrimoine_mtl.config import Settings
@@ -22,14 +23,34 @@ _CSV_CHUNK_SIZE = 500
 def run(cfg: Settings) -> pd.DataFrame:
     """Load the source CSV, hash every row, validate against RawSchema, and write Parquet."""
     _ensure_source_exists(cfg)
+
     encoding = _detect_encoding(cfg.source_path)
+    logger.info(
+        "Detected encoding {encoding} for {source}", encoding=encoding, source=cfg.source_path.name
+    )
+
     df = _load_csv(cfg.source_path, encoding)
     df = _strip_column_spaces(df)
     df = _add_row_hashes(df)
+    loaded_rows = len(df)
+    logger.info("Loaded {rows} rows from {source}", rows=loaded_rows, source=cfg.source_path.name)
+
     df = _idempotence_filter(df, cfg.stage_01_out)
+    skipped_rows = loaded_rows - len(df)
+    logger.info(
+        "Idempotence filter: {skipped} rows skipped, {new} rows to process",
+        skipped=skipped_rows,
+        new=len(df),
+    )
+
     df = _add_metadata(df, cfg)
     df = _validate_schema(df)
     _write_parquet(df, cfg.stage_01_out)
+    logger.info(
+        "Stage 01 complete: {rows} rows written to {path}",
+        rows=len(df),
+        path=cfg.stage_01_out,
+    )
     return df
 
 
