@@ -10,13 +10,13 @@ from ingestion_patrimoine_mtl.utils.logging import setup_logging
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ingestion-patrimoine-mtl",
-        description="Pipeline d'ingestion RAG — Édifices patrimoniaux de Montréal",
+        description="RAG ingestion pipeline — Montreal Heritage Buildings",
     )
     parser.add_argument(
         "--stage",
         choices=["01", "02", "03", "04", "all"],
         default="all",
-        help="Étape du pipeline à exécuter (défaut : all)",
+        help="Pipeline stage to run (default: all)",
     )
     parser.add_argument(
         "--log-level",

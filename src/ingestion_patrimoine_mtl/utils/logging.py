@@ -6,10 +6,10 @@ from loguru import logger
 
 
 def setup_logging(level: str = "INFO", fmt: str = "dev") -> None:
-    """Configure loguru avec le niveau et le format demandés.
+    """Configure loguru with the requested level and format.
 
-    fmt="dev"  → sortie colorée sur stderr (développement)
-    fmt="json" → sortie JSON structurée sur stderr (production / CI)
+    fmt="dev"  → coloured output to stderr (development)
+    fmt="json" → structured JSON output to stderr (production / CI)
     """
     logger.remove()
 

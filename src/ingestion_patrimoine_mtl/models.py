@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 
 
 class BuildingRaw(BaseModel):
-    """Enregistrement brut issu du CSV source (stage 01 · Ingest)."""
+    """Raw record from the source CSV (stage 01 · Ingest)."""
 
-    no_batiment: str
+    identifiant_batiment: str
     nom_historique: str
     typologie: str | None = None
     no_civique: str | None = None
@@ -23,7 +23,7 @@ class BuildingRaw(BaseModel):
     lien: str | None = None
     centro_x: float | None = None
     centro_y: float | None = None
-    # Métadonnées de traçabilité
+    # Pipeline traceability metadata
     record_hash: str
     ingested_at: datetime
     source_file: str
@@ -31,7 +31,7 @@ class BuildingRaw(BaseModel):
 
 
 class BuildingEntities(BaseModel):
-    """Entités nommées extraites par spaCy fr_core_news_lg (stage 04 · Enrich)."""
+    """Named entities extracted by spaCy fr_core_news_lg (stage 04 · Enrich)."""
 
     persons: list[str] = Field(default_factory=list)
     orgs: list[str] = Field(default_factory=list)
@@ -40,7 +40,7 @@ class BuildingEntities(BaseModel):
 
 
 class BuildingEnriched(BaseModel):
-    """Enregistrement final enrichi — format de sortie JSONL pour le RAG engine."""
+    """Final enriched record — JSONL output format for the RAG engine."""
 
     id: str
     nom_historique: str
