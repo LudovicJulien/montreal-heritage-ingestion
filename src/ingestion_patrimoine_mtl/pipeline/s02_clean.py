@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import ftfy
 import pandas as pd
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -19,6 +20,11 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = df.copy()
     df["historique_sommaire"] = df["historique_sommaire"].apply(_strip_html)
     logger.info("Stripped HTML from historique_sommaire")
+
+    text_cols = df.select_dtypes(include="object").columns.tolist()
+    for col in text_cols:
+        df[col] = df[col].apply(_fix_encoding)
+    logger.info("Fixed encoding artifacts in {n} text columns", n=len(text_cols))
 
     df = _validate_schema(df)
     _write_parquet(df, cfg.stage_02_out)
@@ -48,8 +54,14 @@ def _strip_html(text: str | None) -> str | None:
 
 
 def _fix_encoding(text: str | None) -> str | None:
-    """Fix Unicode encoding artifacts using ftfy."""
-    raise NotImplementedError
+    """Fix Unicode encoding artifacts using ftfy.
+
+    Uses isinstance rather than an identity check so that pandas null sentinels
+    (pd.NA, np.nan) are handled safely alongside plain None.
+    """
+    if not isinstance(text, str):
+        return None
+    return str(ftfy.fix_text(text))
 
 
 def _normalize_french_typography(text: str | None) -> str | None:
