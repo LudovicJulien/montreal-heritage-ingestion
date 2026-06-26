@@ -2,8 +2,9 @@
 
 > **A production-grade data ingestion pipeline that transforms raw open data into enriched, RAG-ready records — with contractual data quality, full reproducibility, and French NLP.**
 
-This pipeline ingests the **2,742 heritage buildings** from [Données Québec](https://www.donneesquebec.ca) — the open data portal born from the collaboration between Québec municipalities and the provincial government — applies multi-stage cleaning and validation, extracts named entities with spaCy, and produces structured JSONL records consumed by [rag-engine](https://github.com/LudovicJulien/rag-engine).
+This pipeline ingests the **2,742 heritage buildings** from [Données Québec](https://www.donneesquebec.ca) — the open data portal born from the collaboration between Québec municipalities and the provincial government — applies multi-stage cleaning and validation, and extracts named entities with spaCy to produce structured JSONL records ready for downstream retrieval systems.
 
+![CI](https://github.com/LudovicJulien/montreal-heritage-ingestion/actions/workflows/ci.yml/badge.svg)
 ![Version](https://img.shields.io/badge/version-0.1.0-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![DVC](https://img.shields.io/badge/DVC-3.50+-purple)
@@ -30,37 +31,34 @@ This pipeline solves each of these problems with a dedicated stage, contractual 
 
 ```
 Données Québec open data portal (donneesquebec.ca)
-         │
-         ▼  make download
+         |
+         v  make download
 rawData/edifices_patrimoine.csv  (2,742 buildings · 16 columns)
-         │
-         ▼  [01 · Ingest]
-         │  chardet encoding detection · SHA-256 per-row hashing · idempotency
-         │  metadata injection (ingested_at, source_file, pipeline_version)
-         ▼
-data/01_raw/buildings_raw.parquet          ← RawSchema (Pandera)
-         │
-         ▼  [02 · Clean]
-         │  BeautifulSoup HTML stripping · ftfy encoding repair
-         │  French typography normalization · whitespace collapsing
-         ▼
-data/02_clean/buildings_clean.parquet      ← CleanSchema (Pandera)
-         │
-         ▼  [03 · Normalize]
-         │  Pydantic v2 record validation · date range enforcement [1600–2030]
-         │  Montreal bbox coordinate check · 19-borough arrondissement validation
-         │  TYPE_DE_VOIE / EST_OUEST canonical normalization · data quality report
-         ▼
-data/03_normalized/buildings_normalized.parquet   ← NormalizedSchema (Pandera)
-         │
-         ▼  [04 · Enrich]
-         │  spaCy fr_core_news_lg batch NER · entity extraction (PER, ORG, LOC, DATE)
-         │  BuildingEnriched assembly · JSONL serialization
-         ▼
+         |
+         v  [01 · Ingest]
+         |  chardet encoding detection · SHA-256 per-row hashing · idempotency
+         |  metadata injection (ingested_at, source_file, pipeline_version)
+         v
+data/01_raw/buildings_raw.parquet          <- RawSchema (Pandera)
+         |
+         v  [02 · Clean]
+         |  BeautifulSoup HTML stripping · ftfy encoding repair
+         |  French typography normalization · whitespace collapsing
+         v
+data/02_clean/buildings_clean.parquet      <- CleanSchema (Pandera)
+         |
+         v  [03 · Normalize]
+         |  Pydantic v2 record validation · date range enforcement [1600-2030]
+         |  Montreal bbox coordinate check · 19-borough arrondissement validation
+         |  TYPE_DE_VOIE / EST_OUEST canonical normalization · data quality report
+         v
+data/03_normalized/buildings_normalized.parquet   <- NormalizedSchema (Pandera)
+         |
+         v  [04 · Enrich]
+         |  spaCy fr_core_news_lg batch NER · entity extraction (PER, ORG, LOC, DATE)
+         |  BuildingEnriched assembly · JSONL serialization
+         v
 data/04_enriched/buildings_enriched.jsonl
-         │
-         ▼
-  rag-engine  (chunking · embedding · indexing — out of scope)
 ```
 
 **Key design decisions:**
@@ -93,7 +91,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | Construction dates outside plausible range | 03 | Pydantic validator: `[1600, 2030]`, nullify on violation |
 | Coordinates outside Montreal island | 03 | `is_in_montreal_bbox()` against WGS84 bbox |
 | Non-canonical borough names | 03 | Validated against official 19-arrondissement list |
-| Flat text without entity metadata | 04 | spaCy `fr_core_news_lg` batch NER → structured `BuildingEntities` |
+| Flat text without entity metadata | 04 | spaCy `fr_core_news_lg` batch NER -> structured `BuildingEntities` |
 
 ---
 
@@ -117,26 +115,12 @@ Each record in `buildings_enriched.jsonl` is a self-contained building object:
     "persons": ["Jacob De Witt"],
     "orgs": [],
     "dates": ["1846"],
-    "locations": ["Montréal", "rue McGill"]
+    "locations": ["Montreal", "rue McGill"]
   },
   "record_hash": "a3f2c1...",
   "ingested_at": "2026-06-09T14:00:00Z",
   "pipeline_version": "0.1.0"
 }
-```
-
----
-
-## Quick Start
-
-```bash
-git clone https://github.com/LudovicJulien/montreal-heritage-ingestion.git
-cd montreal-heritage-ingestion
-make install      # install deps + pre-commit hooks
-make download     # fetch raw CSV from Données Montréal
-dvc repro         # run all 4 stages (skips unchanged ones)
-make lint         # ruff + mypy strict
-make test         # pytest with coverage report
 ```
 
 ---
@@ -153,13 +137,23 @@ make test         # pytest with coverage report
 ```bash
 git clone https://github.com/LudovicJulien/montreal-heritage-ingestion.git
 cd montreal-heritage-ingestion
-make install       # installs deps + pre-commit hooks
+make install       # install deps + pre-commit hooks
 ```
+
+### Configure your DVC remote
+
+DVC tracks pipeline artifacts (Parquet, JSONL). Each contributor sets their own local remote path:
+
+```bash
+dvc remote add -d local /your/path/to/dvc-store --local
+```
+
+The URL is written to `.dvc/config.local` which is gitignored — your path never reaches the repository.
 
 ### Run the full pipeline
 
 ```bash
-make download      # fetch raw CSV from Données Montréal (~1 MB)
+make download      # fetch raw CSV from Données Quebec (~1 MB)
 dvc repro          # run all 4 stages, skip unchanged ones
 ```
 
@@ -180,23 +174,49 @@ dvc repro --force  # ignore cache, re-run everything
 
 ## Development
 
-```bash
-make lint          # ruff check + ruff format + mypy strict
-make test          # pytest with coverage report
-```
+### Make targets
 
-Pre-commit runs `ruff`, `ruff-format`, and `mypy` on every commit.
+| Command | Description |
+|---------|-------------|
+| `make install` | Install dependencies and pre-commit hooks |
+| `make format` | Auto-format and fix linting issues (ruff) |
+| `make lint` | Check formatting, style, and types without modifying files |
+| `make test` | Run pytest with coverage report |
+| `make check` | Run `lint` then `test` in sequence (used in CI) |
+| `make clean` | Remove `__pycache__`, `.coverage`, `htmlcov/`, `.mypy_cache/` |
+| `make download` | Fetch source CSV from Données Quebec |
+| `make run` | Run the full pipeline via `python -m ingestion_patrimoine_mtl` |
+
+### Pre-commit hooks
+
+Pre-commit runs automatically on every commit:
+
+| Hook | Purpose |
+|------|---------|
+| `trailing-whitespace` | Remove trailing spaces |
+| `end-of-file-fixer` | Ensure files end with a newline |
+| `check-merge-conflict` | Block commits with unresolved conflict markers |
+| `check-yaml` | Validate YAML syntax |
+| `ruff` | Lint and auto-fix Python |
+| `ruff-format` | Format Python |
+| `mypy` | Type-check with strict mode |
 
 ### Environment variables
 
-All settings are managed by `pydantic-settings` and can be overridden via `.env` or environment:
+All settings are managed by `pydantic-settings`. Copy `.env.example` to `.env` and adjust as needed:
+
+```bash
+cp .env.example .env
+```
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `INGESTION_RAW_DATA_DIR` | `rawData` | Source CSV directory |
+| `INGESTION_SOURCE_FILE` | `edifices_patrimoine.csv` | Source CSV filename |
 | `INGESTION_DATA_DIR` | `data` | Pipeline output root |
-| `INGESTION_LOG_LEVEL` | `INFO` | Logging level |
-| `INGESTION_LOG_FORMAT` | `dev` | `dev` (colored) or `json` (structured) |
+| `INGESTION_PIPELINE_VERSION` | `0.1.0` | Version stamped on every ingested row |
+| `INGESTION_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `INGESTION_LOG_FORMAT` | `dev` | `dev` (colored) or `json` (structured, for CI/prod) |
 
 ---
 
@@ -215,6 +235,7 @@ All settings are managed by `pydantic-settings` and can be overridden via `.env`
 | Config | pydantic-settings | `.env` + env vars, typed, validated |
 | Logging | loguru | Colored dev output, JSON mode for CI |
 | Linting | ruff + mypy strict | Enforced on every commit via pre-commit |
+| CI | GitHub Actions | Parallel lint and test jobs on every push and PR |
 
 ---
 
@@ -223,40 +244,32 @@ All settings are managed by `pydantic-settings` and can be overridden via `.env`
 ```
 montreal-heritage-ingestion/
 ├── src/ingestion_patrimoine_mtl/
-│   ├── config.py           # Pydantic BaseSettings — paths + pipeline flags
-│   ├── models.py           # BuildingRaw · BuildingEntities · BuildingEnriched
-│   ├── schemas.py          # Pandera DataFrame contracts per stage
+│   ├── config.py            # Pydantic BaseSettings — paths + pipeline flags
+│   ├── models.py            # BuildingRaw · BuildingEntities · BuildingEnriched
+│   ├── schemas.py           # Pandera DataFrame contracts per stage
 │   ├── pipeline/
-│   │   ├── s01_ingest.py   # Encoding detection · hashing · idempotency
-│   │   ├── s02_clean.py    # HTML · ftfy · French typography
+│   │   ├── s01_ingest.py    # Encoding detection · hashing · idempotency
+│   │   ├── s02_clean.py     # HTML · ftfy · French typography
 │   │   ├── s03_normalize.py # Pydantic validation · geo · address normalization
-│   │   └── s04_enrich.py   # spaCy NER · JSONL export
+│   │   └── s04_enrich.py    # spaCy NER · JSONL export
 │   └── utils/
-│       ├── hashing.py      # SHA-256 per-row · DataFrame hashing
-│       ├── geo.py          # Montreal bbox · Lambert→WGS84 · borough list
-│       └── logging.py      # loguru setup (dev / json)
+│       ├── hashing.py       # SHA-256 per-row · DataFrame hashing
+│       ├── geo.py           # Montreal bbox · Lambert->WGS84 · borough list
+│       └── logging.py       # loguru setup (dev / json)
 ├── scripts/
-│   └── download_raw_data.py  # Fetch CSV from Données Montréal + integrity check
+│   └── download_raw_data.py # Fetch CSV from Données Quebec + integrity check
 ├── tests/
-│   ├── unit/               # Isolated tests per utility and stage
-│   └── integration/        # End-to-end pipeline on sample records
-├── data/                   # Pipeline outputs (DVC-tracked, git-ignored)
+│   ├── unit/                # Isolated tests per utility and stage
+│   └── integration/         # End-to-end pipeline on sample records
+├── docs/adr/                # Architecture Decision Records
+├── data/                    # Pipeline outputs (DVC-tracked, git-ignored)
 │   ├── 01_raw/
 │   ├── 02_clean/
 │   ├── 03_normalized/
 │   └── 04_enriched/
-├── dvc.yaml                # 4-stage DVC pipeline definition
-└── rawData/                # Source CSV (git-ignored, reproducible via make download)
-```
-
----
-
-## Related
-
-This pipeline is the data preparation layer for **[rag-engine](https://github.com/LudovicJulien/rag-engine)** — a production-grade RAG backend with hybrid retrieval (BM25 + dense), multi-provider LLM support, and full observability.
-
-```
-montreal-heritage-ingestion  →  buildings_enriched.jsonl  →  rag-engine
+├── .env.example             # Environment variable reference
+├── dvc.yaml                 # 4-stage DVC pipeline definition
+└── rawData/                 # Source CSV (git-ignored, reproducible via make download)
 ```
 
 ---
