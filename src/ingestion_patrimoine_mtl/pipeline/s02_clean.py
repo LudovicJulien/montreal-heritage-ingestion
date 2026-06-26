@@ -26,6 +26,10 @@ def run(cfg: Settings) -> pd.DataFrame:
         df[col] = df[col].apply(_fix_encoding)
     logger.info("Fixed encoding artifacts in {n} text columns", n=len(text_cols))
 
+    for col in text_cols:
+        df[col] = df[col].apply(_collapse_whitespace)
+    logger.info("Normalized whitespace in {n} text columns", n=len(text_cols))
+
     df = _validate_schema(df)
     _write_parquet(df, cfg.stage_02_out)
     logger.info(

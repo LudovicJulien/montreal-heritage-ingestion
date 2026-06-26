@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from ingestion_patrimoine_mtl.pipeline.s02_clean import _fix_encoding, _strip_html
+from ingestion_patrimoine_mtl.pipeline.s02_clean import (
+    _collapse_whitespace,
+    _fix_encoding,
+    _strip_html,
+)
 
 
 class TestStripHtml:
@@ -42,13 +46,36 @@ class TestFixEncoding:
         assert _fix_encoding(None) is None
 
     def test_returns_none_for_pandas_na(self) -> None:
+        from typing import Any
+
         import pandas as pd
 
-        assert _fix_encoding(pd.NA) is None
+        na: Any = pd.NA
+        assert _fix_encoding(na) is None
 
     def test_fixes_double_mojibake(self) -> None:
         # "é" double-encoded: UTF-8 bytes misread twice → "Ã\x83Â©"
         assert _fix_encoding("Ã\x83Â©difice") == "édifice"
+
+
+class TestCollapseWhitespace:
+    def test_collapses_multiple_spaces(self) -> None:
+        assert _collapse_whitespace("foo  bar") == "foo bar"
+
+    def test_collapses_newlines(self) -> None:
+        assert _collapse_whitespace("foo\nbar") == "foo bar"
+
+    def test_collapses_tabs(self) -> None:
+        assert _collapse_whitespace("foo\tbar") == "foo bar"
+
+    def test_strips_leading_trailing_whitespace(self) -> None:
+        assert _collapse_whitespace("  foo bar  ") == "foo bar"
+
+    def test_no_op_on_clean_text(self) -> None:
+        assert _collapse_whitespace("édifice patrimonial") == "édifice patrimonial"
+
+    def test_returns_none_for_none_input(self) -> None:
+        assert _collapse_whitespace(None) is None
 
 
 class TestNormalizeFrenchTypography:
