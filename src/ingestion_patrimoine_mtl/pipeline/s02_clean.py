@@ -30,6 +30,9 @@ def run(cfg: Settings) -> pd.DataFrame:
         df[col] = df[col].apply(_collapse_whitespace)
     logger.info("Normalized whitespace in {n} text columns", n=len(text_cols))
 
+    df = _empty_to_none(df)
+    logger.info("Converted empty strings to pd.NA")
+
     df = _validate_schema(df)
     _write_parquet(df, cfg.stage_02_out)
     logger.info(
@@ -81,8 +84,16 @@ def _collapse_whitespace(text: str | None) -> str | None:
 
 
 def _empty_to_none(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert empty strings '' to pd.NA across all text columns."""
-    raise NotImplementedError
+    """Convert empty strings '' to pd.NA across all text columns.
+
+    Runs after _collapse_whitespace so that whitespace-only cells, which
+    collapse to '', are also captured and nulled out.
+    """
+    df = df.copy()
+    text_cols = df.select_dtypes(include="object").columns.tolist()
+    for col in text_cols:
+        df[col] = df[col].replace("", pd.NA)
+    return df
 
 
 def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:

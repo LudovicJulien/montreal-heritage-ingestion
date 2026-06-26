@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
 from ingestion_patrimoine_mtl.pipeline.s02_clean import (
     _collapse_whitespace,
+    _empty_to_none,
     _fix_encoding,
     _strip_html,
 )
@@ -76,6 +78,41 @@ class TestCollapseWhitespace:
 
     def test_returns_none_for_none_input(self) -> None:
         assert _collapse_whitespace(None) is None
+
+
+class TestEmptyToNone:
+    def test_converts_empty_string_to_na(self) -> None:
+        df = pd.DataFrame({"nom": ["", "Maison Dupont"]})
+        result = _empty_to_none(df)
+        assert result["nom"].iloc[0] is pd.NA
+        assert result["nom"].iloc[1] == "Maison Dupont"
+
+    def test_converts_all_object_columns(self) -> None:
+        df = pd.DataFrame({"a": ["", "x"], "b": ["y", ""]})
+        result = _empty_to_none(df)
+        assert result["a"].iloc[0] is pd.NA
+        assert result["b"].iloc[1] is pd.NA
+
+    def test_leaves_non_object_columns_untouched(self) -> None:
+        df = pd.DataFrame({"nom": [""], "annee": [0]})
+        result = _empty_to_none(df)
+        assert result["annee"].iloc[0] == 0
+
+    def test_preserves_existing_nulls(self) -> None:
+        df = pd.DataFrame({"nom": [None, "x"]})
+        result = _empty_to_none(df)
+        assert result["nom"].iloc[0] is None
+
+    def test_whitespace_only_cells_not_converted(self) -> None:
+        # _empty_to_none only targets exact '' — whitespace is _collapse_whitespace's job
+        df = pd.DataFrame({"nom": ["   "]})
+        result = _empty_to_none(df)
+        assert result["nom"].iloc[0] == "   "
+
+    def test_does_not_mutate_input(self) -> None:
+        df = pd.DataFrame({"nom": [""]})
+        _empty_to_none(df)
+        assert df["nom"].iloc[0] == ""
 
 
 class TestNormalizeFrenchTypography:
