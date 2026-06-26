@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from ingestion_patrimoine_mtl.pipeline.s02_clean import _strip_html
+from ingestion_patrimoine_mtl.pipeline.s02_clean import _fix_encoding, _strip_html
 
 
 class TestStripHtml:
@@ -25,6 +25,30 @@ class TestStripHtml:
 
     def test_unwraps_subscript_inline(self) -> None:
         assert _strip_html("H<sub>2</sub>O") == "H2O"
+
+
+class TestFixEncoding:
+    def test_fixes_mojibake(self) -> None:
+        # "é" encoded as UTF-8 then misread as Latin-1: \xc3\xa9 → "Ã©"
+        assert _fix_encoding("Ã©difice") == "édifice"
+
+    def test_no_op_on_clean_text(self) -> None:
+        assert _fix_encoding("édifice patrimonial") == "édifice patrimonial"
+
+    def test_no_op_on_ascii(self) -> None:
+        assert _fix_encoding("heritage building") == "heritage building"
+
+    def test_returns_none_for_none_input(self) -> None:
+        assert _fix_encoding(None) is None
+
+    def test_returns_none_for_pandas_na(self) -> None:
+        import pandas as pd
+
+        assert _fix_encoding(pd.NA) is None
+
+    def test_fixes_double_mojibake(self) -> None:
+        # "é" double-encoded: UTF-8 bytes misread twice → "Ã\x83Â©"
+        assert _fix_encoding("Ã\x83Â©difice") == "édifice"
 
 
 class TestNormalizeFrenchTypography:
