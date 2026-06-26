@@ -13,7 +13,7 @@ from ingestion_patrimoine_mtl.schemas import CleanSchema
 
 
 def run(cfg: Settings) -> pd.DataFrame:
-    """Read raw Parquet, strip HTML from text columns, validate, and write clean Parquet."""
+    """Read raw Parquet, clean all text columns, validate, and write clean Parquet."""
     df = pd.read_parquet(cfg.stage_01_out)
     logger.info("Stage 02 — cleaning {rows} rows from {path}", rows=len(df), path=cfg.stage_01_out)
 
@@ -30,6 +30,10 @@ def run(cfg: Settings) -> pd.DataFrame:
         df[col] = df[col].apply(_collapse_whitespace)
     logger.info("Normalized whitespace in {n} text columns", n=len(text_cols))
 
+    for col in text_cols:
+        df[col] = df[col].apply(_normalize_french_typography)
+    logger.info("Normalized French typography in {n} text columns", n=len(text_cols))
+
     df = _empty_to_none(df)
     logger.info("Converted empty strings to pd.NA")
 
@@ -44,6 +48,7 @@ def run(cfg: Settings) -> pd.DataFrame:
 
 
 _INLINE_TAG_RE = re.compile(r"<su[pb][^>]*>(.*?)</su[pb]>", re.IGNORECASE | re.DOTALL)
+_QUOTED_TEXT_RE = re.compile(r'"([^"]+)"')
 
 
 def _strip_html(text: str | None) -> str | None:
@@ -72,8 +77,17 @@ def _fix_encoding(text: str | None) -> str | None:
 
 
 def _normalize_french_typography(text: str | None) -> str | None:
-    """Normalize straight apostrophes to curly and fix French quotation marks."""
-    raise NotImplementedError
+    """Normalize straight apostrophes to curly and fix French quotation marks.
+
+    Replaces the ASCII straight apostrophe (U+0027) with the typographic right
+    single quotation mark (U+2019), and converts ASCII double-quoted spans into
+    French guillemets with non-breaking spaces (U+00A0).
+    """
+    if text is None:
+        return None
+    text = text.replace("'", "’")
+    text = _QUOTED_TEXT_RE.sub("« \\1 »", text)
+    return text
 
 
 def _collapse_whitespace(text: str | None) -> str | None:

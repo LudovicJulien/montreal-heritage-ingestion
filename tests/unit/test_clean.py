@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from ingestion_patrimoine_mtl.pipeline.s02_clean import (
     _collapse_whitespace,
     _empty_to_none,
     _fix_encoding,
+    _normalize_french_typography,
     _strip_html,
 )
 
@@ -116,8 +116,24 @@ class TestEmptyToNone:
 
 
 class TestNormalizeFrenchTypography:
-    @pytest.mark.skip(reason="implement with s02_clean")
-    def test_replaces_straight_apostrophes(self) -> None: ...
+    def test_replaces_straight_apostrophes(self) -> None:
+        assert _normalize_french_typography("l'église") == "l’église"
 
-    @pytest.mark.skip(reason="implement with s02_clean")
-    def test_no_op_on_none(self) -> None: ...
+    def test_no_op_on_none(self) -> None:
+        assert _normalize_french_typography(None) is None
+
+    def test_multiple_apostrophes(self) -> None:
+        result = _normalize_french_typography("l'église d'aujourd'hui")
+        assert result == "l’église d’aujourd’hui"
+
+    def test_converts_ascii_double_quotes_to_guillemets(self) -> None:
+        result = _normalize_french_typography('"Maison Dupont"')
+        assert result == "« Maison Dupont »"
+
+    def test_no_op_on_curly_apostrophe(self) -> None:
+        # Already correct — straight-replace does not affect U+2019
+        assert _normalize_french_typography("l’église") == "l’église"
+
+    def test_no_op_on_text_without_special_chars(self) -> None:
+        text = "Édifice patrimonial construit en 1846."
+        assert _normalize_french_typography(text) == text
