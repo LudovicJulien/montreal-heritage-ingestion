@@ -1,6 +1,6 @@
 # ADR-003: Use SHA-256 Hashing for Row-Level Idempotence
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-06-25
 
 ## Context

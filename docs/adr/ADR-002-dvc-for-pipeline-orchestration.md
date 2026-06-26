@@ -1,6 +1,6 @@
 # ADR-002: Use DVC for Data Pipeline Orchestration and Versioning
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-06-25
 
 ## Context

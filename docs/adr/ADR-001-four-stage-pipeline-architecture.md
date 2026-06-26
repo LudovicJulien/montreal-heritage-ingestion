@@ -1,6 +1,6 @@
 # ADR-001: Four-Stage Pipeline Architecture (Ingest → Clean → Normalize → Enrich)
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-06-25
 
 ## Context
