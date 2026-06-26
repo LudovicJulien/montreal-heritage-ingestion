@@ -34,8 +34,9 @@ def run(cfg: Settings) -> pd.DataFrame:
         df[col] = df[col].apply(_normalize_french_typography)
     logger.info("Normalized French typography in {n} text columns", n=len(text_cols))
 
+    empty_count = int((df[text_cols] == "").sum().sum())
     df = _empty_to_none(df)
-    logger.info("Converted empty strings to pd.NA")
+    logger.info("Converted {n} empty strings to pd.NA", n=empty_count)
 
     df = _validate_schema(df)
     _write_parquet(df, cfg.stage_02_out)

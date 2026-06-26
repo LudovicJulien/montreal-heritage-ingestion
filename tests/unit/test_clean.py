@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
+import pandera
+import pytest
 
+from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.pipeline import s02_clean
 from ingestion_patrimoine_mtl.pipeline.s02_clean import (
     _collapse_whitespace,
     _empty_to_none,
     _fix_encoding,
     _normalize_french_typography,
     _strip_html,
+    _validate_schema,
     _write_parquet,
 )
 
@@ -172,3 +178,93 @@ class TestWriteParquet:
 
         pf = pq.read_metadata(dest)
         assert pf.row_group(0).column(0).compression == "SNAPPY"
+
+
+class TestValidateSchema:
+    def _valid_df(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "identifiant_batiment": ["0039-27-4599-00"],
+                "nom_historique": ["Maison Dupont"],
+                "voie": ["McGill"],
+                "arrondissement": ["Ville-Marie"],
+                "record_hash": ["a" * 64],
+            }
+        )
+
+    def test_valid_df_returns_dataframe(self) -> None:
+        result = _validate_schema(self._valid_df())
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 1
+
+    def test_missing_record_hash_raises(self) -> None:
+        df = self._valid_df().drop(columns=["record_hash"])
+        with pytest.raises(pandera.errors.SchemaError):
+            _validate_schema(df)
+
+
+class TestRun:
+    @pytest.fixture
+    def stage01_df(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "identifiant_batiment": [
+                    "0039-27-4599-00",
+                    "0039-27-4600-00",
+                    "0039-27-4601-00",
+                ],
+                "nom_historique": [
+                    "Maisons-magasins Jacob-De Witt I",
+                    "Édifice Aldred",
+                    "Hôtel de ville de Montréal",
+                ],
+                "historique_sommaire": [
+                    "<i>dry goods</i> store construit en 1846.",
+                    "Gratte-ciel  Art déco.",
+                    "Siège de l&#39;administration municipale.",
+                ],
+                "voie": ["McGill", "Place d'Armes", "Notre-Dame"],
+                "arrondissement": ["Ville-Marie", "Ville-Marie", "Ville-Marie"],
+                "record_hash": ["a" * 64, "b" * 64, "c" * 64],
+                "ingested_at": [datetime.now(UTC)] * 3,
+                "source_file": ["edifices_patrimoine.csv"] * 3,
+                "pipeline_version": ["0.1.0-test"] * 3,
+            }
+        )
+
+    @pytest.fixture
+    def stage01_parquet(self, cfg: Settings, stage01_df: pd.DataFrame) -> pd.DataFrame:
+        cfg.stage_01_out.parent.mkdir(parents=True, exist_ok=True)
+        stage01_df.to_parquet(cfg.stage_01_out, compression="snappy", index=False)
+        return stage01_df
+
+    def test_creates_output_parquet(self, stage01_parquet: pd.DataFrame, cfg: Settings) -> None:
+        s02_clean.run(cfg)
+        assert cfg.stage_02_out.is_file()
+
+    def test_row_count_preserved(self, stage01_parquet: pd.DataFrame, cfg: Settings) -> None:
+        result = s02_clean.run(cfg)
+        assert len(result) == len(stage01_parquet)
+
+    def test_html_stripped_from_historique_sommaire(
+        self, stage01_parquet: pd.DataFrame, cfg: Settings
+    ) -> None:
+        result = s02_clean.run(cfg)
+        assert result["historique_sommaire"].iloc[0] == "dry goods store construit en 1846."
+
+    def test_html_entity_and_apostrophe_normalized(
+        self, stage01_parquet: pd.DataFrame, cfg: Settings
+    ) -> None:
+        result = s02_clean.run(cfg)
+        # &#39; decoded by BS4 → ' then normalized to ' (U+2019) by typography step
+        assert result["historique_sommaire"].iloc[2] == "Siège de l’administration municipale."
+
+    def test_double_space_collapsed(self, stage01_parquet: pd.DataFrame, cfg: Settings) -> None:
+        result = s02_clean.run(cfg)
+        assert "  " not in str(result["historique_sommaire"].iloc[1])
+
+    def test_straight_apostrophe_normalized_in_voie(
+        self, stage01_parquet: pd.DataFrame, cfg: Settings
+    ) -> None:
+        result = s02_clean.run(cfg)
+        assert result["voie"].iloc[1] == "Place d’Armes"
