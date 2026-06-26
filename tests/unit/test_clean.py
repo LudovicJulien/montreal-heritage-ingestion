@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 
 from ingestion_patrimoine_mtl.pipeline.s02_clean import (
@@ -10,6 +12,7 @@ from ingestion_patrimoine_mtl.pipeline.s02_clean import (
     _fix_encoding,
     _normalize_french_typography,
     _strip_html,
+    _write_parquet,
 )
 
 
@@ -137,3 +140,35 @@ class TestNormalizeFrenchTypography:
     def test_no_op_on_text_without_special_chars(self) -> None:
         text = "Édifice patrimonial construit en 1846."
         assert _normalize_french_typography(text) == text
+
+
+class TestWriteParquet:
+    def _sample_df(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {"nom": ["Maison Dupont", "Église Saint-Patrick"], "annee": [1846, 1843]}
+        )
+
+    def test_creates_file(self, tmp_path: Path) -> None:
+        dest = tmp_path / "02_clean" / "buildings_clean.parquet"
+        _write_parquet(self._sample_df(), dest)
+        assert dest.is_file()
+
+    def test_creates_parent_directories(self, tmp_path: Path) -> None:
+        dest = tmp_path / "nested" / "deep" / "output.parquet"
+        _write_parquet(self._sample_df(), dest)
+        assert dest.is_file()
+
+    def test_roundtrip_preserves_data(self, tmp_path: Path) -> None:
+        dest = tmp_path / "output.parquet"
+        original = self._sample_df()
+        _write_parquet(original, dest)
+        reloaded = pd.read_parquet(dest)
+        pd.testing.assert_frame_equal(original, reloaded)
+
+    def test_uses_snappy_compression(self, tmp_path: Path) -> None:
+        dest = tmp_path / "output.parquet"
+        _write_parquet(self._sample_df(), dest)
+        import pyarrow.parquet as pq
+
+        pf = pq.read_metadata(dest)
+        assert pf.row_group(0).column(0).compression == "SNAPPY"

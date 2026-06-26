@@ -28,13 +28,18 @@ class RawSchema(pa.DataFrameModel):
 
 
 class CleanSchema(pa.DataFrameModel):
-    """DataFrame contract — stage 02 · Clean output (buildings_clean.parquet)."""
+    """DataFrame contract — stage 02 · Clean output (buildings_clean.parquet).
 
-    identifiant_batiment: Series[str]
-    nom_historique: Series[str]
-    voie: Series[str]
-    arrondissement: Series[str]
-    record_hash: Series[str]
+    Source-derived columns remain nullable: the clean stage normalises text but
+    does not impute missing values. record_hash is pipeline-generated and must
+    always be a valid 64-character SHA-256 hex digest.
+    """
+
+    identifiant_batiment: Series[str] = pa.Field(nullable=True)
+    nom_historique: Series[str] = pa.Field(nullable=True)
+    voie: Series[str] = pa.Field(nullable=True)
+    arrondissement: Series[str] = pa.Field(nullable=True)
+    record_hash: Series[str] = pa.Field(str_length={"min_value": 64, "max_value": 64})
 
     class Config:
         strict = False
