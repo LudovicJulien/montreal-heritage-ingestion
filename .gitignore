@@ -28,6 +28,7 @@ htmlcov/
 
 # DVC
 /tmp/
+docs/tmp/
 
 # Data pipeline outputs (trackés par DVC, pas par git)
 data/01_raw/*.parquet
