@@ -78,6 +78,15 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | [ADR-002](docs/adr/ADR-002-dvc-for-pipeline-orchestration.md) | Why DVC over Airflow, Bash scripts, or Git LFS |
 | [ADR-003](docs/adr/ADR-003-sha256-row-hashing-for-idempotence.md) | Why SHA-256 per-row hashing for idempotent re-runs |
 
+### Stage-by-Stage Documentation
+
+A function-by-function walkthrough of each stage, with real examples from the dataset, lives in [`docs/pipeline/`](docs/pipeline/):
+
+| Stage | Doc |
+|-------|-----|
+| 01 · Ingest | [docs/pipeline/01-ingest.md](docs/pipeline/01-ingest.md) |
+| 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
+
 ---
 
 ## Data Quality Challenges (and how each stage handles them)
@@ -85,7 +94,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | Challenge | Stage | Solution |
 |-----------|-------|----------|
 | Unknown file encoding | 01 | `chardet` detects encoding before `pandas.read_csv` |
-| HTML in `HISTORIQUE_SOMMAIRE` | 02 | `BeautifulSoup` with `html.parser` |
+| HTML in `NOM_HISTORIQUE` / `HISTORIQUE_SOMMAIRE` | 02 | `BeautifulSoup` with `html.parser` |
 | Encoding artifacts in French text | 02 | `ftfy.fix_text()` on all string columns |
 | Curly apostrophes / guillemets inconsistency | 02 | Custom French typography normalizer |
 | Construction dates outside plausible range | 03 | Pydantic validator: `[1600, 2030]`, nullify on violation |
@@ -262,6 +271,7 @@ montreal-heritage-ingestion/
 │   ├── unit/                # Isolated tests per utility and stage
 │   └── integration/         # End-to-end pipeline on sample records
 ├── docs/adr/                # Architecture Decision Records
+├── docs/pipeline/           # Stage-by-stage walkthrough (01-ingest.md, 02-clean.md)
 ├── data/                    # Pipeline outputs (DVC-tracked, git-ignored)
 │   ├── 01_raw/
 │   ├── 02_clean/
