@@ -1,35 +1,142 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
+import ftfy
 import pandas as pd
+from bs4 import BeautifulSoup
+from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.schemas import CleanSchema
+
+HTML_COLS = ["nom_historique", "historique_sommaire"]
 
 
 def run(cfg: Settings) -> pd.DataFrame:
-    """Strip HTML, fix encoding artifacts, and normalize typography."""
-    raise NotImplementedError
+    """Read raw Parquet, clean all text columns, validate, and write clean Parquet."""
+    df = pd.read_parquet(cfg.stage_01_out)
+    logger.info("Stage 02 — cleaning {rows} rows from {path}", rows=len(df), path=cfg.stage_01_out)
+
+    df = df.copy()
+    for col in HTML_COLS:
+        df[col] = df[col].apply(_strip_html)
+    logger.info("Stripped HTML from {cols}", cols=HTML_COLS)
+
+    text_cols = _text_columns(df)
+    for col in text_cols:
+        df[col] = df[col].apply(_fix_encoding)
+    logger.info("Fixed encoding artifacts in {n} text columns", n=len(text_cols))
+
+    for col in text_cols:
+        df[col] = df[col].apply(_collapse_whitespace)
+    logger.info("Normalized whitespace in {n} text columns", n=len(text_cols))
+
+    for col in text_cols:
+        df[col] = df[col].apply(_normalize_french_typography)
+    logger.info("Normalized French typography in {n} text columns", n=len(text_cols))
+
+    empty_count = int((df[text_cols] == "").sum().sum())
+    df = _empty_to_none(df)
+    logger.info("Converted {n} empty strings to null", n=empty_count)
+
+    df = _validate_schema(df)
+    _write_parquet(df, cfg.stage_02_out)
+    logger.info(
+        "Stage 02 complete: {rows} rows written to {path}",
+        rows=len(df),
+        path=cfg.stage_02_out,
+    )
+    return df
+
+
+_INLINE_TAG_RE = re.compile(r"<su[pb][^>]*>(.*?)</su[pb]>", re.IGNORECASE | re.DOTALL)
+_QUOTED_TEXT_RE = re.compile(r'"([^"]+)"')
 
 
 def _strip_html(text: str | None) -> str | None:
-    """Extract plain text from an HTML string using BeautifulSoup."""
-    raise NotImplementedError
+    """Extract plain text from an HTML string using BeautifulSoup.
+
+    <sup> and <sub> are stripped via regex before BeautifulSoup parsing so that
+    their content is inlined without a separator (e.g. M<sup>e</sup> → "Me",
+    not "M e"). Block-level tags still get the space separator from get_text().
+    """
+    if text is None:
+        return None
+    inlined = _INLINE_TAG_RE.sub(r"\1", text)
+    plain = BeautifulSoup(inlined, "html.parser").get_text(" ")
+    return _collapse_whitespace(plain)
 
 
 def _fix_encoding(text: str | None) -> str | None:
-    """Fix Unicode encoding artifacts using ftfy."""
-    raise NotImplementedError
+    """Fix Unicode encoding artifacts using ftfy.
+
+    Uses isinstance rather than an identity check so that pandas null sentinels
+    (pd.NA, np.nan) are handled safely alongside plain None.
+    """
+    if not isinstance(text, str):
+        return None
+    return str(ftfy.fix_text(text))
 
 
 def _normalize_french_typography(text: str | None) -> str | None:
-    """Normalize straight apostrophes to curly and fix French quotation marks."""
-    raise NotImplementedError
+    """Normalize straight apostrophes to curly and fix French quotation marks.
+
+    Replaces the ASCII straight apostrophe (U+0027) with the typographic right
+    single quotation mark (U+2019), and converts ASCII double-quoted spans into
+    French guillemets with non-breaking spaces (U+00A0).
+    """
+    if text is None:
+        return None
+    text = text.replace("'", "’")
+    text = _QUOTED_TEXT_RE.sub("« \\1 »", text)
+    return text
 
 
 def _collapse_whitespace(text: str | None) -> str | None:
     """Collapse multiple spaces and line breaks into a single space."""
-    raise NotImplementedError
+    if text is None:
+        return None
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _text_columns(df: pd.DataFrame) -> list[str]:
+    """Return columns holding text, whether stored as object or pandas' string dtype.
+
+    Deliberately avoids `select_dtypes(include=["object", "str"])`: passing the
+    "str" alias alongside "object" trips a legacy numpy-string-dtype guard in
+    pandas and raises TypeError regardless of pandas version. Checking each
+    column's dtype directly sidesteps that.
+    """
+    return [
+        col
+        for col in df.columns
+        if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col])
+    ]
 
 
 def _empty_to_none(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert empty strings '' to pd.NA across all text columns."""
-    raise NotImplementedError
+    """Convert empty strings '' to a null value across all text columns.
+
+    Runs after _collapse_whitespace so that whitespace-only cells, which
+    collapse to '', are also captured and nulled out. The exact null sentinel
+    (pd.NA vs. NaN) depends on the column's dtype — check for missingness with
+    pd.isna() rather than an identity comparison.
+    """
+    df = df.copy()
+    text_cols = _text_columns(df)
+    for col in text_cols:
+        df[col] = df[col].replace("", pd.NA)
+    return df
+
+
+def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate the DataFrame against CleanSchema; raises SchemaError on any violation."""
+    return CleanSchema.validate(df)
+
+
+def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    """Write the validated DataFrame to a snappy-compressed Parquet file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, compression="snappy", index=False)

@@ -5,7 +5,7 @@
 This pipeline ingests the **2,742 heritage buildings** from [Données Québec](https://www.donneesquebec.ca) — the open data portal born from the collaboration between Québec municipalities and the provincial government — applies multi-stage cleaning and validation, and extracts named entities with spaCy to produce structured JSONL records ready for downstream retrieval systems.
 
 ![CI](https://github.com/LudovicJulien/montreal-heritage-ingestion/actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-0.1.0-brightgreen)
+![Version](https://img.shields.io/badge/version-0.2.0-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![DVC](https://img.shields.io/badge/DVC-3.50+-purple)
 ![License](https://img.shields.io/badge/license-MIT-blue)
@@ -119,7 +119,7 @@ Each record in `buildings_enriched.jsonl` is a self-contained building object:
   },
   "record_hash": "a3f2c1...",
   "ingested_at": "2026-06-09T14:00:00Z",
-  "pipeline_version": "0.1.0"
+  "pipeline_version": "0.2.0"
 }
 ```
 
@@ -214,7 +214,7 @@ cp .env.example .env
 | `INGESTION_RAW_DATA_DIR` | `rawData` | Source CSV directory |
 | `INGESTION_SOURCE_FILE` | `edifices_patrimoine.csv` | Source CSV filename |
 | `INGESTION_DATA_DIR` | `data` | Pipeline output root |
-| `INGESTION_PIPELINE_VERSION` | `0.1.0` | Version stamped on every ingested row |
+| `INGESTION_PIPELINE_VERSION` | `0.2.0` | Version stamped on every ingested row |
 | `INGESTION_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `INGESTION_LOG_FORMAT` | `dev` | `dev` (colored) or `json` (structured, for CI/prod) |
 
