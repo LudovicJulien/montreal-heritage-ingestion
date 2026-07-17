@@ -11,6 +11,8 @@ from loguru import logger
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.schemas import CleanSchema
 
+HTML_COLS = ["nom_historique", "historique_sommaire"]
+
 
 def run(cfg: Settings) -> pd.DataFrame:
     """Read raw Parquet, clean all text columns, validate, and write clean Parquet."""
@@ -18,8 +20,9 @@ def run(cfg: Settings) -> pd.DataFrame:
     logger.info("Stage 02 — cleaning {rows} rows from {path}", rows=len(df), path=cfg.stage_01_out)
 
     df = df.copy()
-    df["historique_sommaire"] = df["historique_sommaire"].apply(_strip_html)
-    logger.info("Stripped HTML from historique_sommaire")
+    for col in HTML_COLS:
+        df[col] = df[col].apply(_strip_html)
+    logger.info("Stripped HTML from {cols}", cols=HTML_COLS)
 
     text_cols = _text_columns(df)
     for col in text_cols:

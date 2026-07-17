@@ -93,14 +93,14 @@ class TestEmptyToNone:
     def test_converts_empty_string_to_na(self) -> None:
         df = pd.DataFrame({"nom": ["", "Maison Dupont"]})
         result = _empty_to_none(df)
-        assert result["nom"].iloc[0] is pd.NA
+        assert pd.isna(result["nom"].iloc[0])
         assert result["nom"].iloc[1] == "Maison Dupont"
 
     def test_converts_all_object_columns(self) -> None:
         df = pd.DataFrame({"a": ["", "x"], "b": ["y", ""]})
         result = _empty_to_none(df)
-        assert result["a"].iloc[0] is pd.NA
-        assert result["b"].iloc[1] is pd.NA
+        assert pd.isna(result["a"].iloc[0])
+        assert pd.isna(result["b"].iloc[1])
 
     def test_leaves_non_object_columns_untouched(self) -> None:
         df = pd.DataFrame({"nom": [""], "annee": [0]})
@@ -110,7 +110,7 @@ class TestEmptyToNone:
     def test_preserves_existing_nulls(self) -> None:
         df = pd.DataFrame({"nom": [None, "x"]})
         result = _empty_to_none(df)
-        assert result["nom"].iloc[0] is None
+        assert pd.isna(result["nom"].iloc[0])
 
     def test_whitespace_only_cells_not_converted(self) -> None:
         # _empty_to_none only targets exact '' — whitespace is _collapse_whitespace's job
@@ -215,7 +215,7 @@ class TestRun:
                 ],
                 "nom_historique": [
                     "Maisons-magasins Jacob-De Witt I",
-                    "Édifice Aldred",
+                    "<i>Édifice Aldred</i>",
                     "Hôtel de ville de Montréal",
                 ],
                 "historique_sommaire": [
@@ -251,6 +251,12 @@ class TestRun:
     ) -> None:
         result = s02_clean.run(cfg)
         assert result["historique_sommaire"].iloc[0] == "dry goods store construit en 1846."
+
+    def test_html_stripped_from_nom_historique(
+        self, stage01_parquet: pd.DataFrame, cfg: Settings
+    ) -> None:
+        result = s02_clean.run(cfg)
+        assert result["nom_historique"].iloc[1] == "Édifice Aldred"
 
     def test_html_entity_and_apostrophe_normalized(
         self, stage01_parquet: pd.DataFrame, cfg: Settings
