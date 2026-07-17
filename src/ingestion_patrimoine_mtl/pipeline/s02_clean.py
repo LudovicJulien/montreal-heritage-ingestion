@@ -21,7 +21,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     df["historique_sommaire"] = df["historique_sommaire"].apply(_strip_html)
     logger.info("Stripped HTML from historique_sommaire")
 
-    text_cols = df.select_dtypes(include="object").columns.tolist()
+    text_cols = _text_columns(df)
     for col in text_cols:
         df[col] = df[col].apply(_fix_encoding)
     logger.info("Fixed encoding artifacts in {n} text columns", n=len(text_cols))
@@ -36,7 +36,7 @@ def run(cfg: Settings) -> pd.DataFrame:
 
     empty_count = int((df[text_cols] == "").sum().sum())
     df = _empty_to_none(df)
-    logger.info("Converted {n} empty strings to pd.NA", n=empty_count)
+    logger.info("Converted {n} empty strings to null", n=empty_count)
 
     df = _validate_schema(df)
     _write_parquet(df, cfg.stage_02_out)
@@ -98,14 +98,31 @@ def _collapse_whitespace(text: str | None) -> str | None:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _text_columns(df: pd.DataFrame) -> list[str]:
+    """Return columns holding text, whether stored as object or pandas' string dtype.
+
+    Deliberately avoids `select_dtypes(include=["object", "str"])`: passing the
+    "str" alias alongside "object" trips a legacy numpy-string-dtype guard in
+    pandas and raises TypeError regardless of pandas version. Checking each
+    column's dtype directly sidesteps that.
+    """
+    return [
+        col
+        for col in df.columns
+        if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col])
+    ]
+
+
 def _empty_to_none(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert empty strings '' to pd.NA across all text columns.
+    """Convert empty strings '' to a null value across all text columns.
 
     Runs after _collapse_whitespace so that whitespace-only cells, which
-    collapse to '', are also captured and nulled out.
+    collapse to '', are also captured and nulled out. The exact null sentinel
+    (pd.NA vs. NaN) depends on the column's dtype — check for missingness with
+    pd.isna() rather than an identity comparison.
     """
     df = df.copy()
-    text_cols = df.select_dtypes(include="object").columns.tolist()
+    text_cols = _text_columns(df)
     for col in text_cols:
         df[col] = df[col].replace("", pd.NA)
     return df

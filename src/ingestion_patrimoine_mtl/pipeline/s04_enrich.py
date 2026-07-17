@@ -19,7 +19,7 @@ def _extract_entities(texts: list[str | None]) -> list[BuildingEntities]:
 
 
 def _build_enriched_record(
-    row: pd.Series,
+    row: pd.Series[Any],
     entities: BuildingEntities,
 ) -> dict[str, Any]:
     """Assemble the final BuildingEnriched object with all RAG-ready fields."""

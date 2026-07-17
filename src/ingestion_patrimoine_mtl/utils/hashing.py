@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 
 import pandas as pd
 
 
-def compute_row_hash(row: pd.Series) -> str:
+def compute_row_hash(row: pd.Series[Any]) -> str:
     """Compute a deterministic SHA-256 hash for a single DataFrame row.
 
     Based on key-sorted JSON serialization, independent of column order.
@@ -19,6 +20,6 @@ def compute_row_hash(row: pd.Series) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def compute_dataframe_hashes(df: pd.DataFrame) -> pd.Series:
+def compute_dataframe_hashes(df: pd.DataFrame) -> pd.Series[str]:
     """Compute the SHA-256 hash of every row in a DataFrame."""
     return df.apply(compute_row_hash, axis=1)
