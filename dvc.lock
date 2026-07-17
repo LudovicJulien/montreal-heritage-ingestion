@@ -1,0 +1,40 @@
+schema: '2.0'
+stages:
+  s01_ingest:
+    cmd: python -m ingestion_patrimoine_mtl --stage 01
+    deps:
+    - path: rawData/edifices_patrimoine.csv
+      hash: md5
+      md5: 20cdfea7a12a58211e726b8ba1906aee
+      size: 739700
+      isexec: true
+    - path: src/ingestion_patrimoine_mtl/pipeline/s01_ingest.py
+      hash: md5
+      md5: de5020f43e32acfe838134ed5f1e4ac9
+      size: 5963
+      isexec: true
+    outs:
+    - path: data/01_raw/buildings_raw.parquet
+      hash: md5
+      md5: 1efc8d424b3ccd3fc5563f12034ea21a
+      size: 469067
+      isexec: true
+  s02_clean:
+    cmd: python -m ingestion_patrimoine_mtl --stage 02
+    deps:
+    - path: data/01_raw/buildings_raw.parquet
+      hash: md5
+      md5: 1efc8d424b3ccd3fc5563f12034ea21a
+      size: 469067
+      isexec: true
+    - path: src/ingestion_patrimoine_mtl/pipeline/s02_clean.py
+      hash: md5
+      md5: 646ec276ad0f171fea4de808554c189e
+      size: 4987
+      isexec: true
+    outs:
+    - path: data/02_clean/buildings_clean.parquet
+      hash: md5
+      md5: 7864780b71a7b1f229fdcc72db730c95
+      size: 470764
+      isexec: true
