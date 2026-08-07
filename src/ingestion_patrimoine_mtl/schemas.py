@@ -55,6 +55,7 @@ class NormalizedSchema(pa.DataFrameModel):
     nom_historique: Series[str]
     voie: Series[str]
     arrondissement: Series[str] = pa.Field(isin=MONTREAL_AGGLOMERATION)
+    municipalite_type: Series[str] = pa.Field(nullable=True, isin=["arrondissement", "ville_liee"])
     # WGS84 coordinates — Montreal Island bounding box
     # Note: check whether CENTRO_X/Y is Lambert NAD83 (EPSG:32198) in the source CSV
     centro_x: Series[float] = pa.Field(nullable=True, ge=-74.1, le=-73.4)
