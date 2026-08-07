@@ -32,6 +32,19 @@ YEAR_MAX = 2030
 
 YEAR_COLS = ["debut_des_travaux", "fin_des_travaux"]
 
+# Columns whose null rate is worth tracking across runs.
+REPORTED_COLS = [
+    "nom_historique",
+    "voie",
+    "type_de_voie",
+    "est_ouest",
+    "arrondissement",
+    "debut_des_travaux",
+    "fin_des_travaux",
+    "centro_x",
+    "centro_y",
+]
+
 
 def run(cfg: Settings) -> pd.DataFrame:
     """Normalize types, coordinates and addresses, then validate against NormalizedSchema.
@@ -58,12 +71,40 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _cast_years(df)
     df = _cast_coordinates(df)
 
+    _log_quality_report(df)
+
     df = _validate_schema(df)
     _write_parquet(df, cfg.stage_03_out)
     logger.info(
         "Stage 03 complete: {rows} rows written to {path}", rows=len(df), path=cfg.stage_03_out
     )
     return df
+
+
+def _log_quality_report(df: pd.DataFrame) -> None:
+    """Log null rates and municipality tagging for the normalized frame.
+
+    A silent nullification is indistinguishable from source data that was already
+    null, which makes a quality regression after a data refresh invisible. These
+    counts are the audit trail (ADR-004).
+    """
+    total = len(df)
+    if not total:
+        logger.warning("Quality report skipped: no rows to report on")
+        return
+
+    for col in REPORTED_COLS:
+        nulls = int(df[col].isna().sum())
+        logger.info(
+            "Null rate {col}: {nulls}/{total} ({pct:.1f}%)",
+            col=col,
+            nulls=nulls,
+            total=total,
+            pct=100 * nulls / total,
+        )
+
+    tagging = df["municipalite_type"].value_counts(dropna=False).to_dict()
+    logger.info("Municipality tagging: {tagging}", tagging=tagging)
 
 
 def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
