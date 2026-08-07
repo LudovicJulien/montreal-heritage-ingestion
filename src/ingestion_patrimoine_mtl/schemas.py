@@ -5,6 +5,8 @@ from datetime import datetime
 import pandera as pa
 from pandera.typing import Series
 
+from ingestion_patrimoine_mtl.utils.geo import MONTREAL_AGGLOMERATION
+
 
 class RawSchema(pa.DataFrameModel):
     """DataFrame contract — stage 01 · Ingest output (buildings_raw.parquet).
@@ -52,7 +54,7 @@ class NormalizedSchema(pa.DataFrameModel):
     identifiant_batiment: Series[str]
     nom_historique: Series[str]
     voie: Series[str]
-    arrondissement: Series[str]
+    arrondissement: Series[str] = pa.Field(isin=MONTREAL_AGGLOMERATION)
     # WGS84 coordinates — Montreal Island bounding box
     # Note: check whether CENTRO_X/Y is Lambert NAD83 (EPSG:32198) in the source CSV
     centro_x: Series[float] = pa.Field(nullable=True, ge=-74.1, le=-73.4)
