@@ -16,6 +16,7 @@ from ingestion_patrimoine_mtl.pipeline.s03_normalize import (
     _validate_arrondissement,
     run,
 )
+from ingestion_patrimoine_mtl.schemas import NormalizedSchema
 
 
 class TestNormalizeVoieType:
@@ -220,3 +221,32 @@ class TestRunNormalize:
         """The row with a bad borough, a bad year and bad coords all survive."""
         result = run(cfg)
         assert set(result["record_hash"]) == {"a" * 64, "b" * 64, "c" * 64, "d" * 64, "e" * 64}
+
+    def test_parquet_written_to_expected_path(self, cfg: Settings, clean_parquet: Path) -> None:
+        """run() creates the Parquet file at the path returned by cfg.stage_03_out."""
+        run(cfg)
+        assert cfg.stage_03_out.is_file()
+
+    def test_written_parquet_passes_schema_validation(
+        self, cfg: Settings, clean_parquet: Path
+    ) -> None:
+        """What lands on disk satisfies the contract, not just what run() returns."""
+        run(cfg)
+        NormalizedSchema.validate(pd.read_parquet(cfg.stage_03_out))
+
+    def test_written_parquet_carries_municipalite_type(
+        self, cfg: Settings, clean_parquet: Path
+    ) -> None:
+        """The scope tag survives the Parquet round-trip to the next stage."""
+        run(cfg)
+        df = pd.read_parquet(cfg.stage_03_out)
+        assert "municipalite_type" in df.columns
+        assert set(df["municipalite_type"].dropna()) == {"arrondissement", "ville_liee"}
+
+    def test_years_round_trip_as_nullable_integers(
+        self, cfg: Settings, clean_parquet: Path
+    ) -> None:
+        """Int64 survives Parquet — a float round-trip would print years as 1846.0."""
+        run(cfg)
+        df = pd.read_parquet(cfg.stage_03_out)
+        assert str(df["debut_des_travaux"].dtype) == "Int64"
