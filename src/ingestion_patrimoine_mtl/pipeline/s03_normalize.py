@@ -92,9 +92,13 @@ def _validate_arrondissement(df: pd.DataFrame) -> pd.DataFrame:
 
     unknown = canonical.notna() & ~canonical.isin(MONTREAL_AGGLOMERATION)
     for value in sorted(df.loc[unknown, "arrondissement"].dropna().unique()):
-        logger.warning("ARRONDISSEMENT outside the agglomeration allowlist: {value!r}", value=value)
+        logger.warning(
+            "Nullified ARRONDISSEMENT outside the agglomeration allowlist: {value!r}", value=value
+        )
 
-    df["arrondissement"] = canonical
+    # A value matching neither a borough nor a known ville liée is nullified: the
+    # record stays in the corpus, it simply loses a municipality it cannot prove.
+    df["arrondissement"] = canonical.where(~unknown)
     df["municipalite_type"] = canonical.map(_municipality_type)
     return df
 
