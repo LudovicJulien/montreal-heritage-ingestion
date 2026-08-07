@@ -110,6 +110,15 @@ A function-by-function walkthrough of each stage, with real examples from the da
 | 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
 | 03 · Normalize | [docs/pipeline/03-normalize.md](docs/pipeline/03-normalize.md) — data profile and specification (stage not yet implemented) |
 
+### Stage-by-Stage Documentation
+
+A function-by-function walkthrough of each stage, with real examples from the dataset, lives in [`docs/pipeline/`](docs/pipeline/):
+
+| Stage | Doc |
+|-------|-----|
+| 01 · Ingest | [docs/pipeline/01-ingest.md](docs/pipeline/01-ingest.md) |
+| 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
+
 ---
 
 ## Data Quality Challenges (and how each stage handles them)
