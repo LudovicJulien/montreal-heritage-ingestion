@@ -60,6 +60,44 @@ MONTREAL_VILLES_LIEES: frozenset[str] = frozenset(
 MONTREAL_AGGLOMERATION: frozenset[str] = MONTREAL_ARRONDISSEMENTS | MONTREAL_VILLES_LIEES
 
 
+# The source appends this suffix to every borough name: "Ville-Marie (Montréal)".
+_MONTREAL_SUFFIX = " (Montréal)"
+
+# The source separates compound borough names with an em dash, while the official
+# names use an en dash.
+_EM_DASH = "—"
+_EN_DASH = "–"
+
+# Stage 02 rewrites straight apostrophes as typographic ones; the official names
+# use the straight form.
+_CURLY_APOSTROPHE = "’"
+_STRAIGHT_APOSTROPHE = "'"
+
+
+def canonicalize_municipality(name: str | None) -> str | None:
+    """Rewrite a raw municipality label into the canonical form used by the constants.
+
+    Three transformations are needed, and all three are required: without them
+    MONTREAL_ARRONDISSEMENTS matches none of the source records.
+
+    - Strip the ``" (Montréal)"`` suffix the source appends to every borough.
+    - Map the em dash (U+2014) used by the source onto the en dash (U+2013) of the
+      official names.
+    - Map the typographic apostrophe (U+2019) back onto the straight apostrophe
+      (U+0027). This one is introduced by our own stage 02, in
+      ``_normalize_french_typography`` — normalizing here keeps the two stages
+      decoupled instead of making the typography stage aware of borough names.
+
+    Returns None for a null or blank input.
+    """
+    if not isinstance(name, str):
+        return None
+    canonical = name.removesuffix(_MONTREAL_SUFFIX).strip()
+    canonical = canonical.replace(_EM_DASH, _EN_DASH)
+    canonical = canonical.replace(_CURLY_APOSTROPHE, _STRAIGHT_APOSTROPHE)
+    return canonical or None
+
+
 class WGS84Coords(NamedTuple):
     latitude: float
     longitude: float
