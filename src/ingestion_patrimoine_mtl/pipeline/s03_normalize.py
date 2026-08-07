@@ -6,9 +6,15 @@ from loguru import logger
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.utils.geo import (
     MONTREAL_AGGLOMERATION,
+    MONTREAL_ARRONDISSEMENTS,
+    MONTREAL_VILLES_LIEES,
     canonicalize_municipality,
     is_in_montreal_bbox,
 )
+
+# Values of the municipalite_type column added by this stage.
+MUNICIPALITE_ARRONDISSEMENT = "arrondissement"
+MUNICIPALITE_VILLE_LIEE = "ville_liee"
 
 # The only two cardinal qualifiers the source uses on a street name.
 EST_OUEST_CANONICAL = frozenset({"Est", "Ouest"})
@@ -89,7 +95,23 @@ def _validate_arrondissement(df: pd.DataFrame) -> pd.DataFrame:
         logger.warning("ARRONDISSEMENT outside the agglomeration allowlist: {value!r}", value=value)
 
     df["arrondissement"] = canonical
+    df["municipalite_type"] = canonical.map(_municipality_type)
     return df
+
+
+def _municipality_type(name: object) -> str | None:
+    """Classify a canonical municipality name as a borough or a ville liée.
+
+    Materializing the distinction as a column rather than a log line keeps the
+    scope decision open: whoever consumes the output filters to the Ville de
+    Montréal proper with a single predicate, and nothing is destroyed if the
+    answer changes (ADR-004).
+    """
+    if name in MONTREAL_ARRONDISSEMENTS:
+        return MUNICIPALITE_ARRONDISSEMENT
+    if name in MONTREAL_VILLES_LIEES:
+        return MUNICIPALITE_VILLE_LIEE
+    return None
 
 
 def _cast_coordinates(df: pd.DataFrame) -> pd.DataFrame:
