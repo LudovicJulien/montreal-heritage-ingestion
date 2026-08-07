@@ -157,3 +157,35 @@ class TestValidateArrondissement:
         """This helper never rejects — only _reject_missing_identifier does."""
         result = _validate_arrondissement(sample_clean_df)
         assert len(result) == len(sample_clean_df)
+
+
+class TestMunicipaliteType:
+    def test_borough_is_tagged_arrondissement(self, sample_clean_df: pd.DataFrame) -> None:
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[0, "municipalite_type"] == "arrondissement"
+
+    def test_em_dash_borough_is_tagged(self, sample_clean_df: pd.DataFrame) -> None:
+        """Tagging runs on the canonical form, so spelling variants still resolve."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[1, "municipalite_type"] == "arrondissement"
+
+    def test_curly_apostrophe_borough_is_tagged(self, sample_clean_df: pd.DataFrame) -> None:
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[2, "municipalite_type"] == "arrondissement"
+
+    def test_ville_liee_is_tagged(self, sample_clean_df: pd.DataFrame) -> None:
+        """Westmount is kept in the corpus and marked as an independent city."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[3, "municipalite_type"] == "ville_liee"
+
+    def test_unknown_municipality_is_untagged(self, sample_clean_df: pd.DataFrame) -> None:
+        """No tag when the municipality resolves to neither list."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert pd.isna(result.loc[4, "municipalite_type"])
+
+    def test_tagging_counts_split_the_corpus(self, sample_clean_df: pd.DataFrame) -> None:
+        """Every row is either a borough, a ville liée, or untagged — nothing is lost."""
+        result = _validate_arrondissement(sample_clean_df)
+        counts = result["municipalite_type"].value_counts(dropna=False)
+        assert counts["arrondissement"] == 4
+        assert counts["ville_liee"] == 1
