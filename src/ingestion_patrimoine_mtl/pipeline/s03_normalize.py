@@ -11,6 +11,13 @@ EST_OUEST_CANONICAL = frozenset({"Est", "Ouest"})
 # Abbreviations absent from the current extract, kept as a refresh guard.
 EST_OUEST_ABBREVIATIONS = {"E": "Est", "O": "Ouest", "W": "Ouest"}
 
+# Plausible bounds for a construction year on a Montreal heritage building.
+# The observed valid range is 1669-2013; the sentinels 0 and 9999 fall outside.
+YEAR_MIN = 1600
+YEAR_MAX = 2030
+
+YEAR_COLS = ["debut_des_travaux", "fin_des_travaux"]
+
 
 def run(cfg: Settings) -> pd.DataFrame:
     """Validate types, coordinates, and addresses; produce buildings_normalized.parquet."""
@@ -69,5 +76,20 @@ def _cast_coordinates(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _cast_years(df: pd.DataFrame) -> pd.DataFrame:
-    """Cast DEBUT_DES_TRAVAUX / FIN_DES_TRAVAUX to nullable int, clamped to [1600, 2030]."""
-    raise NotImplementedError
+    """Cast the construction years to nullable Int64 and nullify implausible values.
+
+    The source encodes an unknown year as the sentinel ``0`` or ``9999`` rather than
+    leaving the cell empty — 242 records carry ``fin_des_travaux = 0``, 36% of the
+    non-null values. Both sentinels fall outside the plausible range, so a single
+    bound check covers them and any other out-of-range year.
+
+    Values are nullified, never clamped: mapping 9999 onto 2030 would fabricate a
+    construction date no source supports, and it would be indistinguishable from a
+    genuine one downstream (ADR-004).
+    """
+    df = df.copy()
+    for col in YEAR_COLS:
+        years = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+        implausible = years.notna() & ((years < YEAR_MIN) | (years > YEAR_MAX))
+        df[col] = years.mask(implausible)
+    return df
