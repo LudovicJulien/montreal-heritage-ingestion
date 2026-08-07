@@ -123,8 +123,8 @@ class TestCastCoordinates:
     def test_centro_x_is_the_longitude(self, sample_clean_df: pd.DataFrame) -> None:
         """Guard against the axis swap: centro_x is the longitude, centro_y the latitude."""
         result = _cast_coordinates(sample_clean_df)
-        assert result.loc[0, "centro_x"] < -70
-        assert 45 < result.loc[0, "centro_y"] < 46
+        assert (result["centro_x"].dropna() < -70).all()
+        assert result["centro_y"].dropna().between(45, 46).all()
 
     def test_no_row_is_dropped(self, sample_clean_df: pd.DataFrame) -> None:
         """A bad position degrades the field; the building stays in the corpus."""

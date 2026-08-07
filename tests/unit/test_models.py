@@ -93,9 +93,13 @@ class TestBuildingRawValidation:
     def test_missing_arrondissement_raises(self) -> None:
         """arrondissement is the only source column populated on every record."""
         with pytest.raises(ValidationError):
-            BuildingRaw(
-                record_hash=RECORD_HASH,
-                ingested_at=INGESTED_AT,
-                source_file=SOURCE_FILE,
-                pipeline_version=PIPELINE_VERSION,
+            # model_validate rather than the constructor: the missing field is the
+            # point of the test, and a direct call would not type-check.
+            BuildingRaw.model_validate(
+                {
+                    "record_hash": RECORD_HASH,
+                    "ingested_at": INGESTED_AT,
+                    "source_file": SOURCE_FILE,
+                    "pipeline_version": PIPELINE_VERSION,
+                }
             )
