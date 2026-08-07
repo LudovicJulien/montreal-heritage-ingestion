@@ -203,9 +203,15 @@ non-nullable but contain nulls after stage 02:
 | `nom_historique` | `Series[str]` | 30 |
 | `voie` | `Series[str]` | 37 |
 
-`arrondissement` is the only source column that is genuinely non-null (0/1336) and can stay
-required. The other three must either become `nullable=True`, or stage 03 must drop those rows —
-which is the decision recorded in [ADR-004](../adr/ADR-004-data-quality-policy.md).
+[ADR-004](../adr/ADR-004-data-quality-policy.md) resolves this: `identifiant_batiment` stays
+required, because the stage rejects the rows that lack one; `nom_historique` and `voie` become
+`nullable=True`.
+
+`arrondissement` is non-null in the source (0/1336), but it must be **nullable too** — the stage
+nullifies a municipality matching neither a borough nor a known ville liée, so the column can hold
+a null even though the source never does. No row hits that path in the current extract; declaring
+it non-nullable would work today and break on the first refresh that introduces an unknown
+municipality.
 
 The schema also needs a column for the borough/ville-liée distinction introduced in §3, and the
 `centro_x`/`centro_y` bounds already in place (`ge=-74.1, le=-73.4` and `ge=45.3, le=45.8`) are
