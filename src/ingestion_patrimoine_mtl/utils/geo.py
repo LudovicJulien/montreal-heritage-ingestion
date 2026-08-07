@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import NamedTuple
-
 # Montreal Island bounding box (WGS84)
 MONTREAL_LAT_MIN = 45.3
 MONTREAL_LAT_MAX = 45.8
@@ -98,11 +96,6 @@ def canonicalize_municipality(name: str | None) -> str | None:
     return canonical or None
 
 
-class WGS84Coords(NamedTuple):
-    latitude: float
-    longitude: float
-
-
 def is_in_montreal_bbox(lat: float, lon: float) -> bool:
     """Return True if the WGS84 coordinates fall within the Montreal bounding box."""
     return (
@@ -118,12 +111,3 @@ def is_valid_arrondissement(name: str) -> bool:
 def is_ville_liee(name: str) -> bool:
     """Return True if the name is one of the 15 villes liées of the agglomeration."""
     return name in MONTREAL_VILLES_LIEES
-
-
-def lambert_to_wgs84(x: float, y: float) -> WGS84Coords:
-    """Convert Lambert NAD83 Quebec (EPSG:32198) coordinates to WGS84.
-
-    Implement if CENTRO_X/Y turns out to be in Lambert NAD83 in the source CSV.
-    Use pyproj: Transformer.from_crs("EPSG:32198", "EPSG:4326").
-    """
-    raise NotImplementedError("Verify the CRS of CENTRO_X/Y before implementing")
