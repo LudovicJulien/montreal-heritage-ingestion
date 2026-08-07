@@ -4,6 +4,7 @@ import pandas as pd
 from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.schemas import NormalizedSchema
 from ingestion_patrimoine_mtl.utils.geo import (
     MONTREAL_AGGLOMERATION,
     MONTREAL_ARRONDISSEMENTS,
@@ -31,8 +32,37 @@ YEAR_COLS = ["debut_des_travaux", "fin_des_travaux"]
 
 
 def run(cfg: Settings) -> pd.DataFrame:
-    """Validate types, coordinates, and addresses; produce buildings_normalized.parquet."""
-    raise NotImplementedError
+    """Normalize types, coordinates and addresses, then validate against NormalizedSchema.
+
+    Rejection comes first: dropping the identity-less rows keeps every downstream
+    count consistent with what is actually written.
+    """
+    df = pd.read_parquet(cfg.stage_02_out)
+    logger.info(
+        "Stage 03 — normalizing {rows} rows from {path}", rows=len(df), path=cfg.stage_02_out
+    )
+
+    loaded_rows = len(df)
+    df = _reject_missing_identifier(df)
+    logger.info(
+        "Identity filter: {rejected} row(s) rejected, {kept} kept",
+        rejected=loaded_rows - len(df),
+        kept=len(df),
+    )
+
+    df = _normalize_voie_type(df)
+    df = _normalize_est_ouest(df)
+    df = _validate_arrondissement(df)
+    df = _cast_years(df)
+    df = _cast_coordinates(df)
+
+    df = _validate_schema(df)
+    return df
+
+
+def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate the DataFrame against NormalizedSchema; raises SchemaError on violation."""
+    return NormalizedSchema.validate(df)
 
 
 def _reject_missing_identifier(df: pd.DataFrame) -> pd.DataFrame:
