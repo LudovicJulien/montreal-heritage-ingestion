@@ -38,3 +38,22 @@ stages:
       md5: 7864780b71a7b1f229fdcc72db730c95
       size: 470764
       isexec: true
+  s03_normalize:
+    cmd: python -m ingestion_patrimoine_mtl --stage 03
+    deps:
+    - path: data/02_clean/buildings_clean.parquet
+      hash: md5
+      md5: 7864780b71a7b1f229fdcc72db730c95
+      size: 470764
+      isexec: true
+    - path: src/ingestion_patrimoine_mtl/pipeline/s03_normalize.py
+      hash: md5
+      md5: 32f4c4dee1e81ea92c06374fa3e80d51
+      size: 10013
+      isexec: true
+    outs:
+    - path: data/03_normalized/buildings_normalized.parquet
+      hash: md5
+      md5: cd3156b47afb4d05693cba42834ceb07
+      size: 474356
+      isexec: true
