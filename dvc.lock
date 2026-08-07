@@ -10,7 +10,7 @@ stages:
       isexec: true
     - path: src/ingestion_patrimoine_mtl/config.py
       hash: md5
-      md5: 6c8ea17bc2d8582487910c77eee761be
+      md5: 963a0e34d856cfb7974ff8a3dca4fd8b
       size: 1291
       isexec: true
     - path: src/ingestion_patrimoine_mtl/pipeline/s01_ingest.py
@@ -31,7 +31,7 @@ stages:
     outs:
     - path: data/01_raw/buildings_raw.parquet
       hash: md5
-      md5: efe43e9318ba195dc075bd8a27a57556
+      md5: c8ba207f7a3073d9a46594dd6b447313
       size: 469067
       isexec: true
   s02_clean:
@@ -39,12 +39,12 @@ stages:
     deps:
     - path: data/01_raw/buildings_raw.parquet
       hash: md5
-      md5: efe43e9318ba195dc075bd8a27a57556
+      md5: c8ba207f7a3073d9a46594dd6b447313
       size: 469067
       isexec: true
     - path: src/ingestion_patrimoine_mtl/config.py
       hash: md5
-      md5: 6c8ea17bc2d8582487910c77eee761be
+      md5: 963a0e34d856cfb7974ff8a3dca4fd8b
       size: 1291
       isexec: true
     - path: src/ingestion_patrimoine_mtl/pipeline/s02_clean.py
@@ -60,7 +60,7 @@ stages:
     outs:
     - path: data/02_clean/buildings_clean.parquet
       hash: md5
-      md5: 9fc1e393b15ccb5a21fc08ba3c9da5d3
+      md5: 75552ecabab0509c5fc61ed3c9c300de
       size: 470764
       isexec: true
   s03_normalize:
@@ -68,12 +68,12 @@ stages:
     deps:
     - path: data/02_clean/buildings_clean.parquet
       hash: md5
-      md5: 9fc1e393b15ccb5a21fc08ba3c9da5d3
+      md5: 75552ecabab0509c5fc61ed3c9c300de
       size: 470764
       isexec: true
     - path: src/ingestion_patrimoine_mtl/config.py
       hash: md5
-      md5: 6c8ea17bc2d8582487910c77eee761be
+      md5: 963a0e34d856cfb7974ff8a3dca4fd8b
       size: 1291
       isexec: true
     - path: src/ingestion_patrimoine_mtl/pipeline/s03_normalize.py
@@ -94,6 +94,6 @@ stages:
     outs:
     - path: data/03_normalized/buildings_normalized.parquet
       hash: md5
-      md5: ebe8b0aecaa4028702308de071adb8c2
+      md5: 86e49ce9ef571c68c6dcde428a38e544
       size: 474356
       isexec: true

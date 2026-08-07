@@ -368,7 +368,7 @@ confirmed correct by the observed ranges.
 ## Reproducing this profile
 
 Every figure above comes from `data/02_clean/buildings_clean.parquet`, produced by
-`dvc repro` at pipeline version 0.2.0. Regenerate the input with:
+`dvc repro` at pipeline version 0.3.0. Regenerate the input with:
 
 ```bash
 make download
