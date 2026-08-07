@@ -2,14 +2,35 @@
 
 > **A production-grade data ingestion pipeline that transforms raw open data into enriched, RAG-ready records — with contractual data quality, full reproducibility, and French NLP.**
 
-This pipeline ingests the **2,742 heritage buildings** from [Données Québec](https://www.donneesquebec.ca) — the open data portal born from the collaboration between Québec municipalities and the provincial government — applies multi-stage cleaning and validation, and extracts named entities with spaCy to produce structured JSONL records ready for downstream retrieval systems.
+This pipeline ingests the **1,336 heritage buildings** published by [Données Montréal](https://donnees.montreal.ca), the Ville de Montréal open data portal, applies multi-stage cleaning and validation, and extracts named entities with spaCy to produce structured JSONL records ready for downstream retrieval systems.
+
+> The source file counts 1,336 records over 2,743 physical lines: 272 buildings carry a multi-paragraph `HISTORIQUE_SOMMAIRE` with embedded newlines. Line counts are not record counts here — see [03-normalize.md](docs/pipeline/03-normalize.md).
 
 ![CI](https://github.com/LudovicJulien/montreal-heritage-ingestion/actions/workflows/ci.yml/badge.svg)
 ![Version](https://img.shields.io/badge/version-0.2.0-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![DVC](https://img.shields.io/badge/DVC-3.50+-purple)
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Lint](https://img.shields.io/badge/lint-ruff%20%7C%20mypy%20strict-informational)
+
+---
+
+## Project Status
+
+The pipeline is being built stage by stage. Stages 01 and 02 are implemented, tested, and locked in
+DVC; stages 03 and 04 exist as typed skeletons with their specification written and their design
+decisions recorded.
+
+| Stage | Status | Notes |
+|---|---|---|
+| 01 · Ingest | ✅ **Implemented** | Encoding detection, SHA-256 hashing, idempotence, `RawSchema` |
+| 02 · Clean | ✅ **Implemented** | HTML stripping, ftfy, French typography, `CleanSchema` |
+| 03 · Normalize | 📋 **Specified** | Data profile + quality policy settled — see [03-normalize.md](docs/pipeline/03-normalize.md) and [ADR-004](docs/adr/ADR-004-data-quality-policy.md) |
+| 04 · Enrich | ⏳ **Planned** | spaCy is not yet a declared dependency |
+
+`dvc repro` currently runs stages 01–02 and stops at `s03_normalize`. The unit tests for stages 03
+and 04, and the end-to-end integration tests, are `@pytest.mark.skip` placeholders naming the cases
+to cover.
 
 ---
 
@@ -30,10 +51,10 @@ This pipeline solves each of these problems with a dedicated stage, contractual 
 ## Pipeline Architecture
 
 ```
-Données Québec open data portal (donneesquebec.ca)
+Données Montréal open data portal (donnees.montreal.ca)
          |
          v  make download
-rawData/edifices_patrimoine.csv  (2,742 buildings · 16 columns)
+rawData/edifices_patrimoine.csv  (1,336 buildings · 16 columns)
          |
          v  [01 · Ingest]
          |  chardet encoding detection · SHA-256 per-row hashing · idempotency
@@ -77,6 +98,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | [ADR-001](docs/adr/ADR-001-four-stage-pipeline-architecture.md) | Why four stages instead of one monolithic script |
 | [ADR-002](docs/adr/ADR-002-dvc-for-pipeline-orchestration.md) | Why DVC over Airflow, Bash scripts, or Git LFS |
 | [ADR-003](docs/adr/ADR-003-sha256-row-hashing-for-idempotence.md) | Why SHA-256 per-row hashing for idempotent re-runs |
+| [ADR-004](docs/adr/ADR-004-data-quality-policy.md) | When to reject a row, nullify a field, or normalize a value |
 
 ### Stage-by-Stage Documentation
 
@@ -86,6 +108,7 @@ A function-by-function walkthrough of each stage, with real examples from the da
 |-------|-----|
 | 01 · Ingest | [docs/pipeline/01-ingest.md](docs/pipeline/01-ingest.md) |
 | 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
+| 03 · Normalize | [docs/pipeline/03-normalize.md](docs/pipeline/03-normalize.md) — data profile and specification (stage not yet implemented) |
 
 ---
 
@@ -162,9 +185,12 @@ The URL is written to `.dvc/config.local` which is gitignored — your path neve
 ### Run the full pipeline
 
 ```bash
-make download      # fetch raw CSV from Données Quebec (~1 MB)
-dvc repro          # run all 4 stages, skip unchanged ones
+make download      # fetch raw CSV from Données Montréal (~720 KB)
+dvc repro          # run the implemented stages, skip unchanged ones
 ```
+
+> `dvc repro` currently completes stages 01 and 02, then stops at `s03_normalize`, which is not
+> implemented yet. See [Project Status](#project-status).
 
 ### Run a single stage
 
@@ -193,7 +219,7 @@ dvc repro --force  # ignore cache, re-run everything
 | `make test` | Run pytest with coverage report |
 | `make check` | Run `lint` then `test` in sequence (used in CI) |
 | `make clean` | Remove `__pycache__`, `.coverage`, `htmlcov/`, `.mypy_cache/` |
-| `make download` | Fetch source CSV from Données Quebec |
+| `make download` | Fetch source CSV from Données Montréal |
 | `make run` | Run the full pipeline via `python -m ingestion_patrimoine_mtl` |
 
 ### Pre-commit hooks
@@ -266,7 +292,7 @@ montreal-heritage-ingestion/
 │       ├── geo.py           # Montreal bbox · Lambert->WGS84 · borough list
 │       └── logging.py       # loguru setup (dev / json)
 ├── scripts/
-│   └── download_raw_data.py # Fetch CSV from Données Quebec + integrity check
+│   └── download_raw_data.py # Fetch CSV from Données Montréal + integrity check
 ├── tests/
 │   ├── unit/                # Isolated tests per utility and stage
 │   └── integration/         # End-to-end pipeline on sample records
