@@ -122,3 +122,22 @@ class TestNormalizedSchema:
         df["identifiant_batiment"] = None
         with pytest.raises(pandera.errors.SchemaError):
             NormalizedSchema.validate(df)
+
+    def test_null_nom_historique_is_accepted(self) -> None:
+        """30 buildings have no historical name — the record is still valid."""
+        df = self._valid_df()
+        df["nom_historique"] = None
+        NormalizedSchema.validate(df)
+
+    def test_null_voie_is_accepted(self) -> None:
+        """37 buildings have no street — nullified, not rejected (ADR-004)."""
+        df = self._valid_df()
+        df["voie"] = None
+        NormalizedSchema.validate(df)
+
+    def test_null_arrondissement_is_accepted(self) -> None:
+        """An unrecognized municipality is nullified upstream and must pass here."""
+        df = self._valid_df()
+        df["arrondissement"] = None
+        df["municipalite_type"] = None
+        NormalizedSchema.validate(df)
