@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from ingestion_patrimoine_mtl.pipeline.s03_normalize import (
+    _cast_years,
     _normalize_est_ouest,
     _normalize_voie_type,
 )
@@ -61,8 +61,29 @@ class TestNormalizeEstOuest:
 
 
 class TestCastYears:
-    @pytest.mark.skip(reason="implement with s03_normalize")
-    def test_valid_year_is_kept(self) -> None: ...
+    def test_valid_year_is_kept(self, sample_clean_df: pd.DataFrame) -> None:
+        """A plausible year survives the cast unchanged."""
+        result = _cast_years(sample_clean_df)
+        assert result.loc[0, "debut_des_travaux"] == 1846
 
-    @pytest.mark.skip(reason="implement with s03_normalize")
-    def test_year_out_of_range_is_nullified(self) -> None: ...
+    def test_9999_sentinel_is_nullified(self, sample_clean_df: pd.DataFrame) -> None:
+        """9999 is the source's 'unknown', not a year."""
+        result = _cast_years(sample_clean_df)
+        assert pd.isna(result.loc[1, "debut_des_travaux"])
+
+    def test_zero_sentinel_is_nullified(self, sample_clean_df: pd.DataFrame) -> None:
+        """0 is the other 'unknown' sentinel — 242 records carry it on fin_des_travaux."""
+        result = _cast_years(sample_clean_df)
+        assert pd.isna(result.loc[2, "debut_des_travaux"])
+
+    def test_out_of_range_year_is_nullified_not_clamped(
+        self, sample_clean_df: pd.DataFrame
+    ) -> None:
+        """2500 becomes null, never 2030 — clamping would fabricate a date (ADR-004)."""
+        result = _cast_years(sample_clean_df)
+        assert pd.isna(result.loc[3, "fin_des_travaux"])
+
+    def test_dtype_is_nullable_integer(self, sample_clean_df: pd.DataFrame) -> None:
+        """Years are integers that can be absent, so Int64 rather than float or int."""
+        result = _cast_years(sample_clean_df)
+        assert str(result["debut_des_travaux"].dtype) == "Int64"
