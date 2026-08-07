@@ -6,15 +6,22 @@ from pydantic import BaseModel, Field
 
 
 class BuildingRaw(BaseModel):
-    """Raw record from the source CSV (stage 01 · Ingest)."""
+    """Raw record from the source CSV (stage 01 · Ingest).
 
-    identifiant_batiment: str
-    nom_historique: str
-    typologie: str | None = None
-    no_civique: str | None = None
+    Field names mirror the source columns exactly, lowercased by the ingest stage.
+    Only ``arrondissement`` is genuinely populated on every record; the identifier,
+    the historical name, and the street are all missing on a handful of rows, so
+    they are modelled as optional rather than required.
+    """
+
+    identifiant_batiment: str | None = None
+    nom_historique: str | None = None
+    typologie_specifique: str | None = None
+    civique_min: str | None = None
+    civique: str | None = None
     civique_max: str | None = None
     type_de_voie: str | None = None
-    voie: str
+    voie: str | None = None
     est_ouest: str | None = None
     arrondissement: str
     debut_des_travaux: int | None = None
