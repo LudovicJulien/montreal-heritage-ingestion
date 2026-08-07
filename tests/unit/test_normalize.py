@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
+from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.pipeline.s03_normalize import (
     _cast_coordinates,
     _cast_years,
     _normalize_est_ouest,
     _normalize_voie_type,
     _validate_arrondissement,
+    run,
 )
 
 
@@ -189,3 +193,30 @@ class TestMunicipaliteType:
         counts = result["municipalite_type"].value_counts(dropna=False)
         assert counts["arrondissement"] == 4
         assert counts["ville_liee"] == 1
+
+
+@pytest.fixture
+def clean_parquet(cfg: Settings, sample_clean_df: pd.DataFrame) -> Path:
+    """Write sample_clean_df to the stage 02 output path run() reads from."""
+    cfg.stage_02_out.parent.mkdir(parents=True, exist_ok=True)
+    sample_clean_df.to_parquet(cfg.stage_02_out, index=False)
+    return Path(cfg.stage_02_out)
+
+
+class TestRunNormalize:
+    def test_row_without_identifier_is_rejected(self, cfg: Settings, clean_parquet: Path) -> None:
+        """The one rejection ADR-004 allows: a record with no identity."""
+        result = run(cfg)
+        assert len(result) == 5
+
+    def test_every_output_row_has_an_identifier(self, cfg: Settings, clean_parquet: Path) -> None:
+        """After rejection the identifier is non-null by construction."""
+        result = run(cfg)
+        assert result["identifiant_batiment"].notna().all()
+
+    def test_only_the_identity_less_row_is_dropped(
+        self, cfg: Settings, clean_parquet: Path
+    ) -> None:
+        """The row with a bad borough, a bad year and bad coords all survive."""
+        result = run(cfg)
+        assert set(result["record_hash"]) == {"a" * 64, "b" * 64, "c" * 64, "d" * 64, "e" * 64}
