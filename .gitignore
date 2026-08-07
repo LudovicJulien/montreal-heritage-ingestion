@@ -29,6 +29,9 @@ htmlcov/
 .vscode/
 .claude/
 
+# Agent context (local, not part of the project documentation)
+CLAUDE.md
+
 # DVC
 /tmp/
 docs/tmp/
