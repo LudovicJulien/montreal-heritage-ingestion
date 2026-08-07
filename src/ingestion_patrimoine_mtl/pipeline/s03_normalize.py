@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 from loguru import logger
 
@@ -57,12 +59,22 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _cast_coordinates(df)
 
     df = _validate_schema(df)
+    _write_parquet(df, cfg.stage_03_out)
+    logger.info(
+        "Stage 03 complete: {rows} rows written to {path}", rows=len(df), path=cfg.stage_03_out
+    )
     return df
 
 
 def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
     """Validate the DataFrame against NormalizedSchema; raises SchemaError on violation."""
     return NormalizedSchema.validate(df)
+
+
+def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    """Write the validated DataFrame to a snappy-compressed Parquet file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, compression="snappy", index=False)
 
 
 def _reject_missing_identifier(df: pd.DataFrame) -> pd.DataFrame:
