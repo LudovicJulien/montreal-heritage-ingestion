@@ -35,6 +35,22 @@ def run(cfg: Settings) -> pd.DataFrame:
     raise NotImplementedError
 
 
+def _reject_missing_identifier(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop rows with no identifiant_batiment — the only rejection ADR-004 allows.
+
+    A record without an identifier cannot be deduplicated, traced back to the
+    source, or referenced by a retrieval answer: it has no identity to preserve.
+    Every other constraint violation degrades a field to null and keeps the row.
+
+    One row is affected in the current extract.
+    """
+    missing = df["identifiant_batiment"].isna()
+    rejected = int(missing.sum())
+    if rejected:
+        logger.warning("Rejected {n} row(s) with no identifiant_batiment", n=rejected)
+    return df[~missing].reset_index(drop=True)
+
+
 def _normalize_voie_type(df: pd.DataFrame) -> pd.DataFrame:
     """Lowercase TYPE_DE_VOIE so casing variants collapse onto one value.
 
