@@ -5,7 +5,7 @@
 
 ## Context
 
-The pipeline processes 2,742 heritage buildings from a single source CSV into RAG-ready enriched records. An early prototype used one monolithic script, which made it hard to test individual transformations, difficult to rerun partial work after a failure, and impossible to inspect intermediate data quality issues.
+The pipeline processes 1,336 heritage buildings from a single source CSV into RAG-ready enriched records. An early prototype used one monolithic script, which made it hard to test individual transformations, difficult to rerun partial work after a failure, and impossible to inspect intermediate data quality issues.
 
 ## Decision
 
@@ -19,4 +19,4 @@ Each stage has a single, clearly scoped responsibility: raw CSV preservation, te
 
 - DVC tracks four intermediate artifacts (`01_raw`, `02_clean`, `03_normalized`, `04_enriched`); re-running only the affected downstream stages on a source change is free.
 - Four Pandera schemas must be maintained and kept in sync with stage outputs.
-- Slight I/O overhead from writing intermediate Parquet files (~negligible for 2.7k rows).
+- Slight I/O overhead from writing intermediate Parquet files (~negligible for 1.3k rows).
