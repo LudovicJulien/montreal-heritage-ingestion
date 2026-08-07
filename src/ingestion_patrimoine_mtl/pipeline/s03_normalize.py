@@ -4,7 +4,11 @@ import pandas as pd
 from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
-from ingestion_patrimoine_mtl.utils.geo import is_in_montreal_bbox
+from ingestion_patrimoine_mtl.utils.geo import (
+    MONTREAL_AGGLOMERATION,
+    canonicalize_municipality,
+    is_in_montreal_bbox,
+)
 
 # The only two cardinal qualifiers the source uses on a street name.
 EST_OUEST_CANONICAL = frozenset({"Est", "Ouest"})
@@ -67,8 +71,25 @@ def _canonical_est_ouest(value: object) -> str | None:
 
 
 def _validate_arrondissement(df: pd.DataFrame) -> pd.DataFrame:
-    """Reject rows whose ARRONDISSEMENT is not in the official 19-borough list."""
-    raise NotImplementedError
+    """Canonicalize ARRONDISSEMENT and log values outside the agglomeration allowlist.
+
+    Matching runs on the canonical form produced by ``canonicalize_municipality``:
+    the raw labels match none of the official names, so comparing them directly
+    would flag all 1336 records.
+
+    Values are checked against the 19 boroughs plus the 15 villes liées. A ville
+    liée is an independent municipality of the agglomeration, not a data error —
+    its buildings are valid heritage records, so nothing is rejected here (ADR-004).
+    """
+    df = df.copy()
+    canonical = df["arrondissement"].map(canonicalize_municipality)
+
+    unknown = canonical.notna() & ~canonical.isin(MONTREAL_AGGLOMERATION)
+    for value in sorted(df.loc[unknown, "arrondissement"].dropna().unique()):
+        logger.warning("ARRONDISSEMENT outside the agglomeration allowlist: {value!r}", value=value)
+
+    df["arrondissement"] = canonical
+    return df
 
 
 def _cast_coordinates(df: pd.DataFrame) -> pd.DataFrame:
