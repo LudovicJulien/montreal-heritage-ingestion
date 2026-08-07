@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
 
@@ -33,6 +34,10 @@ def _normalize_est_ouest(df: pd.DataFrame) -> pd.DataFrame:
     The current extract holds only ``Est``, ``Ouest`` and nulls — no abbreviation
     survives in the published data. The mapping is kept as a guard: a future refresh
     reintroducing ``E`` or ``O`` is normalized rather than silently carried through.
+
+    A value matching neither the canonical forms nor a known abbreviation is
+    nullified and logged, never raised on: per ADR-004 a constraint violation
+    degrades the field, it does not abort the run.
     """
     df = df.copy()
     df["est_ouest"] = df["est_ouest"].map(_canonical_est_ouest)
@@ -40,13 +45,17 @@ def _normalize_est_ouest(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _canonical_est_ouest(value: object) -> str | None:
-    """Return the canonical cardinal direction for a raw EST_OUEST cell."""
+    """Return the canonical cardinal direction for a raw EST_OUEST cell, or None."""
     if not isinstance(value, str):
         return None
     stripped = value.strip()
     if stripped in EST_OUEST_CANONICAL:
         return stripped
-    return EST_OUEST_ABBREVIATIONS.get(stripped.upper().rstrip("."), stripped)
+    mapped = EST_OUEST_ABBREVIATIONS.get(stripped.upper().rstrip("."))
+    if mapped is not None:
+        return mapped
+    logger.warning("Nullified unexpected EST_OUEST value: {value!r}", value=value)
+    return None
 
 
 def _validate_arrondissement(df: pd.DataFrame) -> pd.DataFrame:
