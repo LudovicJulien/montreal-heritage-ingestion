@@ -5,7 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from ingestion_patrimoine_mtl.pipeline.s03_normalize import _normalize_voie_type
+from ingestion_patrimoine_mtl.pipeline.s03_normalize import (
+    _normalize_est_ouest,
+    _normalize_voie_type,
+)
 
 
 class TestNormalizeVoieType:
@@ -31,14 +34,30 @@ class TestNormalizeVoieType:
 
 
 class TestNormalizeEstOuest:
-    @pytest.mark.skip(reason="implement with s03_normalize")
-    def test_e_becomes_est(self) -> None: ...
+    def test_canonical_value_passes_through(self, sample_clean_df: pd.DataFrame) -> None:
+        """'Est' is already canonical and is returned unchanged."""
+        result = _normalize_est_ouest(sample_clean_df)
+        assert result.loc[0, "est_ouest"] == "Est"
 
-    @pytest.mark.skip(reason="implement with s03_normalize")
-    def test_o_becomes_ouest(self) -> None: ...
+    def test_abbreviation_is_expanded(self, sample_clean_df: pd.DataFrame) -> None:
+        """'O' maps to 'Ouest' — absent from this extract, kept as a refresh guard."""
+        result = _normalize_est_ouest(sample_clean_df)
+        assert result.loc[1, "est_ouest"] == "Ouest"
 
-    @pytest.mark.skip(reason="implement with s03_normalize")
-    def test_none_stays_none(self) -> None: ...
+    def test_unexpected_value_is_nullified(self, sample_clean_df: pd.DataFrame) -> None:
+        """'Nord' is not a cardinal the source uses, so the field degrades to null."""
+        result = _normalize_est_ouest(sample_clean_df)
+        assert pd.isna(result.loc[2, "est_ouest"])
+
+    def test_unexpected_value_does_not_raise(self, sample_clean_df: pd.DataFrame) -> None:
+        """A bad value degrades the field, it never aborts the run (ADR-004)."""
+        result = _normalize_est_ouest(sample_clean_df)
+        assert len(result) == len(sample_clean_df)
+
+    def test_none_stays_none(self, sample_clean_df: pd.DataFrame) -> None:
+        """A missing cardinal is normal — 61% of records have none."""
+        result = _normalize_est_ouest(sample_clean_df)
+        assert pd.isna(result.loc[3, "est_ouest"])
 
 
 class TestCastYears:
