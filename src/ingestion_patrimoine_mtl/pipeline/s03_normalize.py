@@ -11,8 +11,14 @@ def run(cfg: Settings) -> pd.DataFrame:
 
 
 def _normalize_voie_type(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize TYPE_DE_VOIE to lowercase (Rue → rue, Avenue → avenue)."""
-    raise NotImplementedError
+    """Lowercase TYPE_DE_VOIE so casing variants collapse onto one value.
+
+    The source holds 16 distinct types for 15 distinct lowercase forms: the single
+    collision is ``Avenue`` against ``avenue``. Nulls are preserved as nulls.
+    """
+    df = df.copy()
+    df["type_de_voie"] = df["type_de_voie"].str.lower()
+    return df
 
 
 def _normalize_est_ouest(df: pd.DataFrame) -> pd.DataFrame:
