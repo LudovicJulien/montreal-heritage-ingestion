@@ -22,3 +22,4 @@ ADRs are immutable once accepted. Superseded decisions get a new ADR that refere
 | [ADR-001](ADR-001-four-stage-pipeline-architecture.md) | Four-Stage Pipeline Architecture (Ingest → Clean → Normalize → Enrich) | Accepted |
 | [ADR-002](ADR-002-dvc-for-pipeline-orchestration.md) | Use DVC for Pipeline Orchestration and Versioning | Accepted |
 | [ADR-003](ADR-003-sha256-row-hashing-for-idempotence.md) | Use SHA-256 Hashing for Row-Level Idempotence | Accepted |
+| [ADR-004](ADR-004-data-quality-policy.md) | Data Quality Policy — Reject, Nullify, or Normalize | Accepted |
