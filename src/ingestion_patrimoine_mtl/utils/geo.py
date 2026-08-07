@@ -33,6 +33,32 @@ MONTREAL_ARRONDISSEMENTS: frozenset[str] = frozenset(
     }
 )
 
+# The 15 related municipalities (villes liées) of the Montreal agglomeration.
+# These are independent cities, not boroughs of the Ville de Montréal, but the
+# heritage dataset covers them: 9 of the 15 hold buildings in the current extract.
+MONTREAL_VILLES_LIEES: frozenset[str] = frozenset(
+    {
+        "Baie-D'Urfé",
+        "Beaconsfield",
+        "Côte-Saint-Luc",
+        "Dollard-Des Ormeaux",
+        "Dorval",
+        "Hampstead",
+        "Kirkland",
+        "L'Île-Dorval",
+        "Montréal-Est",
+        "Montréal-Ouest",
+        "Mont-Royal",
+        "Pointe-Claire",
+        "Sainte-Anne-de-Bellevue",
+        "Senneville",
+        "Westmount",
+    }
+)
+
+# Every municipality the dataset may legitimately reference.
+MONTREAL_AGGLOMERATION: frozenset[str] = MONTREAL_ARRONDISSEMENTS | MONTREAL_VILLES_LIEES
+
 
 class WGS84Coords(NamedTuple):
     latitude: float
@@ -49,6 +75,11 @@ def is_in_montreal_bbox(lat: float, lon: float) -> bool:
 def is_valid_arrondissement(name: str) -> bool:
     """Return True if the borough name is in the official list of 19 boroughs."""
     return name in MONTREAL_ARRONDISSEMENTS
+
+
+def is_ville_liee(name: str) -> bool:
+    """Return True if the name is one of the 15 villes liées of the agglomeration."""
+    return name in MONTREAL_VILLES_LIEES
 
 
 def lambert_to_wgs84(x: float, y: float) -> WGS84Coords:
