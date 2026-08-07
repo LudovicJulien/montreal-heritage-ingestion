@@ -3,6 +3,9 @@ stages:
     cmd: python -m ingestion_patrimoine_mtl --stage 01
     deps:
       - rawData/edifices_patrimoine.csv
+      - src/ingestion_patrimoine_mtl/config.py
+      - src/ingestion_patrimoine_mtl/schemas.py
+      - src/ingestion_patrimoine_mtl/utils/hashing.py
       - src/ingestion_patrimoine_mtl/pipeline/s01_ingest.py
     outs:
       - data/01_raw/buildings_raw.parquet
@@ -11,6 +14,8 @@ stages:
     cmd: python -m ingestion_patrimoine_mtl --stage 02
     deps:
       - data/01_raw/buildings_raw.parquet
+      - src/ingestion_patrimoine_mtl/config.py
+      - src/ingestion_patrimoine_mtl/schemas.py
       - src/ingestion_patrimoine_mtl/pipeline/s02_clean.py
     outs:
       - data/02_clean/buildings_clean.parquet
@@ -19,6 +24,9 @@ stages:
     cmd: python -m ingestion_patrimoine_mtl --stage 03
     deps:
       - data/02_clean/buildings_clean.parquet
+      - src/ingestion_patrimoine_mtl/config.py
+      - src/ingestion_patrimoine_mtl/schemas.py
+      - src/ingestion_patrimoine_mtl/utils/geo.py
       - src/ingestion_patrimoine_mtl/pipeline/s03_normalize.py
     outs:
       - data/03_normalized/buildings_normalized.parquet
@@ -27,6 +35,8 @@ stages:
     cmd: python -m ingestion_patrimoine_mtl --stage 04
     deps:
       - data/03_normalized/buildings_normalized.parquet
+      - src/ingestion_patrimoine_mtl/config.py
+      - src/ingestion_patrimoine_mtl/models.py
       - src/ingestion_patrimoine_mtl/pipeline/s04_enrich.py
     outs:
       - data/04_enriched/buildings_enriched.jsonl
