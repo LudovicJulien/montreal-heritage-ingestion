@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from ingestion_patrimoine_mtl.pipeline.s03_normalize import (
+    _cast_coordinates,
     _cast_years,
     _normalize_est_ouest,
     _normalize_voie_type,
@@ -87,3 +89,38 @@ class TestCastYears:
         """Years are integers that can be absent, so Int64 rather than float or int."""
         result = _cast_years(sample_clean_df)
         assert str(result["debut_des_travaux"].dtype) == "Int64"
+
+
+class TestCastCoordinates:
+    def test_coords_inside_bbox_are_kept(self, sample_clean_df: pd.DataFrame) -> None:
+        """A Ville-Marie position survives the bbox check."""
+        result = _cast_coordinates(sample_clean_df)
+        assert result.loc[0, "centro_x"] == pytest.approx(-73.5548)
+        assert result.loc[0, "centro_y"] == pytest.approx(45.5019)
+
+    def test_coords_outside_bbox_are_nullified(self, sample_clean_df: pd.DataFrame) -> None:
+        """Longitude -100 is nowhere near Montreal."""
+        result = _cast_coordinates(sample_clean_df)
+        assert pd.isna(result.loc[2, "centro_x"])
+
+    def test_coords_are_nullified_as_a_pair(self, sample_clean_df: pd.DataFrame) -> None:
+        """The latitude is valid on its own but useless without the longitude."""
+        result = _cast_coordinates(sample_clean_df)
+        assert pd.isna(result.loc[2, "centro_y"])
+
+    def test_null_coords_stay_null(self, sample_clean_df: pd.DataFrame) -> None:
+        """4.5% of records have no position at all."""
+        result = _cast_coordinates(sample_clean_df)
+        assert pd.isna(result.loc[3, "centro_x"])
+        assert pd.isna(result.loc[3, "centro_y"])
+
+    def test_centro_x_is_the_longitude(self, sample_clean_df: pd.DataFrame) -> None:
+        """Guard against the axis swap: centro_x is the longitude, centro_y the latitude."""
+        result = _cast_coordinates(sample_clean_df)
+        assert result.loc[0, "centro_x"] < -70
+        assert 45 < result.loc[0, "centro_y"] < 46
+
+    def test_no_row_is_dropped(self, sample_clean_df: pd.DataFrame) -> None:
+        """A bad position degrades the field; the building stays in the corpus."""
+        result = _cast_coordinates(sample_clean_df)
+        assert len(result) == len(sample_clean_df)
