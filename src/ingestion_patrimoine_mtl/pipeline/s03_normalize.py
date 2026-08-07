@@ -4,6 +4,7 @@ import pandas as pd
 from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.utils.geo import is_in_montreal_bbox
 
 # The only two cardinal qualifiers the source uses on a street name.
 EST_OUEST_CANONICAL = frozenset({"Est", "Ouest"})
@@ -71,8 +72,37 @@ def _validate_arrondissement(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _cast_coordinates(df: pd.DataFrame) -> pd.DataFrame:
-    """Cast CENTRO_X/Y to float and validate against the Montreal WGS84 bounding box."""
-    raise NotImplementedError
+    """Cast CENTRO_X/Y to float and nullify positions outside the Montreal bbox.
+
+    The source is already in WGS84 — no projection is applied. Note the axis order:
+    ``centro_x`` is the **longitude** and ``centro_y`` the **latitude**.
+
+    Coordinates are nullified as a pair: half a position cannot place a building.
+    No row in the current extract falls outside the box, so this acts as a
+    regression guard for future refreshes rather than a filter.
+    """
+    df = df.copy()
+    longitude = pd.to_numeric(df["centro_x"], errors="coerce")
+    latitude = pd.to_numeric(df["centro_y"], errors="coerce")
+
+    inside = pd.Series(
+        [
+            bool(pd.notna(lon) and pd.notna(lat) and is_in_montreal_bbox(lat=lat, lon=lon))
+            for lon, lat in zip(longitude, latitude, strict=True)
+        ],
+        index=df.index,
+        dtype=bool,
+    )
+
+    outside = (longitude.notna() | latitude.notna()) & ~inside
+    if int(outside.sum()):
+        logger.warning(
+            "Nullified {n} coordinate pair(s) outside the Montreal bbox", n=int(outside.sum())
+        )
+
+    df["centro_x"] = longitude.where(inside)
+    df["centro_y"] = latitude.where(inside)
+    return df
 
 
 def _cast_years(df: pd.DataFrame) -> pd.DataFrame:
