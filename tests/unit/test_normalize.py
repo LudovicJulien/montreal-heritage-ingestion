@@ -10,6 +10,7 @@ from ingestion_patrimoine_mtl.pipeline.s03_normalize import (
     _cast_years,
     _normalize_est_ouest,
     _normalize_voie_type,
+    _validate_arrondissement,
 )
 
 
@@ -123,4 +124,36 @@ class TestCastCoordinates:
     def test_no_row_is_dropped(self, sample_clean_df: pd.DataFrame) -> None:
         """A bad position degrades the field; the building stays in the corpus."""
         result = _cast_coordinates(sample_clean_df)
+        assert len(result) == len(sample_clean_df)
+
+
+class TestValidateArrondissement:
+    def test_montreal_suffix_is_stripped(self, sample_clean_df: pd.DataFrame) -> None:
+        """The source labels every borough 'X (Montréal)'."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[0, "arrondissement"] == "Ville-Marie"
+
+    def test_em_dash_borough_is_recognized(self, sample_clean_df: pd.DataFrame) -> None:
+        """The source em dash is mapped onto the en dash of the official name."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[1, "arrondissement"] == "Rosemont–La Petite-Patrie"
+
+    def test_curly_apostrophe_borough_is_recognized(self, sample_clean_df: pd.DataFrame) -> None:
+        """Stage 02 rewrites the apostrophe; matching must survive it."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[2, "arrondissement"] == "L'Île-Bizard–Sainte-Geneviève"
+
+    def test_ville_liee_is_kept_not_rejected(self, sample_clean_df: pd.DataFrame) -> None:
+        """Westmount is a valid heritage location, not a data error (ADR-004)."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert result.loc[3, "arrondissement"] == "Westmount"
+
+    def test_value_outside_agglomeration_is_nullified(self, sample_clean_df: pd.DataFrame) -> None:
+        """Laval is outside the agglomeration: the field degrades, the row stays."""
+        result = _validate_arrondissement(sample_clean_df)
+        assert pd.isna(result.loc[4, "arrondissement"])
+
+    def test_no_row_is_dropped(self, sample_clean_df: pd.DataFrame) -> None:
+        """This helper never rejects — only _reject_missing_identifier does."""
+        result = _validate_arrondissement(sample_clean_df)
         assert len(result) == len(sample_clean_df)
