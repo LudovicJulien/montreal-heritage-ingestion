@@ -1,9 +1,9 @@
 # Stage 03 — `s03_normalize.py`
 
-> **Status: specification.** This stage is not implemented yet. This document profiles the data
-> the stage will actually receive and fixes the contract it must honour. The function-by-function
-> walkthrough — like [01 — Ingest](01-ingest.md) and [02 — Clean](02-clean.md) — is written after
-> implementation, from real before/after values.
+This document has two parts. **The walkthrough** explains, function by function, what
+`s03_normalize.py` does, with before/after values taken from the project's real data. **The data
+profile** (§1–§9) records the measurements those functions were designed against, and is the
+reference to re-run after any source refresh.
 
 For the quality policy this stage applies (reject / nullify / normalize), see
 [ADR-004](../adr/ADR-004-data-quality-policy.md).
@@ -13,13 +13,159 @@ Previous stage: [02 — Clean](02-clean.md).
 ---
 
 **Input**: `data/02_clean/buildings_clean.parquet` — 1336 rows × 20 columns
-**Output**: `data/03_normalized/buildings_normalized.parquet`
+**Output**: `data/03_normalized/buildings_normalized.parquet` — 1335 rows × 21 columns
 
 The critical point: this stage reads **the output of stage 02, not the source CSV**. Stage 02
 rewrites text before stage 03 ever sees it, and one of those rewrites actively breaks borough
 matching (see §2). Every figure below was measured on `buildings_clean.parquet`.
 
 ---
+
+# Walkthrough
+
+This is the first stage allowed to *change the meaning* of a value — stages 01 and 02 are
+deliberately non-destructive. Execution order in `run()`:
+
+```
+reject → voie type → cardinal → borough → years → coordinates
+       → quality report → schema validation → write
+```
+
+Rejection runs first so that every count downstream matches what is actually written.
+
+### `_reject_missing_identifier`
+
+| | Value |
+|---|---|
+| **CLEAN** | `nom_historique` = `Maison Joseph-David`, `arrondissement` = `Ahuntsic-Cartierville (Montréal)`, `voie` = `Gouin`, **`identifiant_batiment` = null** |
+| **NORMALIZED** | row absent |
+
+The **only** rejection the stage allows (ADR-004). A record without an identifier cannot be
+deduplicated, traced back to the source, or cited by a retrieval answer: it has no identity to
+preserve. Every other violation degrades a field and keeps the row.
+
+### `_normalize_voie_type`
+
+**Real example** — building `9947-27-1424-01`, *Maison Longpré*:
+
+| | Value |
+|---|---|
+| **CLEAN** | `Avenue` |
+| **NORMALIZED** | `avenue` |
+
+One single casing collision exists in the corpus: `Avenue` (6) against `avenue` (89). 16 distinct
+values become 15. Nulls are preserved, not imputed.
+
+### `_normalize_est_ouest`
+
+A deliberate no-op on this extract: `822 → 822` nulls, no value touched. The column holds only
+`Est` (258), `Ouest` (256) and null. The `E → Est` / `O → Ouest` mapping stays as a guard, so that
+a refresh reintroducing abbreviations is normalized rather than carried through silently.
+
+An unrecognized value is nullified and logged at `WARNING` — never raised on.
+
+### `_validate_arrondissement`
+
+The heart of the stage. **None** of the 1336 raw labels matched the official borough list; after
+canonicalization, **all 1336** do.
+
+**Real examples**, one per cause:
+
+| Cause | Building | CLEAN | NORMALIZED | `municipalite_type` |
+|---|---|---|---|---|
+| Suffix | `0039-27-4599-00` | `Ville-Marie (Montréal)` | `Ville-Marie` | `arrondissement` |
+| Em dash | `0246-22-3706-02` | `Mercier—Hochelaga-Maisonneuve (Montréal)` | `Mercier–Hochelaga-Maisonneuve` | `arrondissement` |
+| Apostrophe | `7173-72-5975-01` | `L’Île-Bizard—Sainte-Geneviève (Montréal)` | `L'Île-Bizard–Sainte-Geneviève` | `arrondissement` |
+| Ville liée | `9999-42-0001-01` | `Westmount` | `Westmount` | **`ville_liee`** |
+
+The three causes stack: the `" (Montréal)"` suffix the source appends everywhere, the em dash
+U+2014 against the en dash U+2013 of the official names, and the typographic apostrophe U+2019 —
+that last one introduced by **our own stage 02**, doing its French-typography job correctly while
+breaking stage 03's matching. Normalizing at comparison time is what keeps the two stages
+decoupled.
+
+Corpus result: **1305 boroughs, 30 villes liées**. The 30 are kept and tagged rather than
+rejected — Westmount, Dorval and Senneville hold real heritage buildings. See §3.
+
+### `_cast_years`
+
+**Real examples**:
+
+| Building | Field | CLEAN | NORMALIZED |
+|---|---|---|---|
+| `0039-46-9193-00` | `debut_des_travaux` | `'9999'` | `<NA>` |
+| `0039-62-1199-01` | `fin_des_travaux` | `'0'` | `<NA>` |
+| `0039-62-1199-01` | `debut_des_travaux` | `'1845'` | `1845` |
+| `0039-27-4599-00` | `debut_des_travaux` | `'1846'` | `1846` |
+
+The source encodes "unknown" as `0` or `9999` rather than leaving the cell empty. Both fall
+outside `[1600, 2030]`, so one bound check covers the sentinels and any other out-of-range value.
+
+**Nullify, never clamp**: mapping `9999` onto `2030` would fabricate a construction date no source
+supports, indistinguishable downstream from a real one.
+
+### `_cast_coordinates`
+
+**Real example** — building `0039-27-4599-00`:
+
+| Field | CLEAN | NORMALIZED | Meaning |
+|---|---|---|---|
+| `centro_x` | `'-73.5579'` | `-73.5579` | **longitude** |
+| `centro_y` | `'45.5001'` | `45.5001` | **latitude** |
+
+No projection is applied — the source is already WGS84 (§5). Zero rows fall outside the bounding
+box in this extract, so the check is a regression guard for future refreshes, not a filter.
+Coordinates are nullified **as a pair**: half a position cannot place a building.
+
+### Type changes
+
+| Column | CLEAN | NORMALIZED |
+|---|---|---|
+| `debut_des_travaux` | `object` (str) | **`Int64`** |
+| `fin_des_travaux` | `object` (str) | **`Int64`** |
+| `centro_x` | `object` (str) | **`float64`** |
+| `centro_y` | `object` (str) | **`float64`** |
+
+`Int64` rather than `int` because a year can be absent; rather than `float` because otherwise 1846
+renders as `1846.0` all the way into the UI.
+
+### `_log_quality_report`
+
+Logs a null rate per tracked column plus the municipality tagging counts. A silent nullification is
+indistinguishable from source data that was already null, which would make a quality regression
+after a refresh invisible. These counts are the audit trail.
+
+### `_validate_schema` and `_write_parquet`
+
+Validates against `NormalizedSchema` — which enforces the agglomeration allowlist on
+`arrondissement`, the bbox on the coordinates, and the two permitted `municipalite_type` values —
+then writes snappy Parquet to `data/03_normalized/buildings_normalized.parquet`.
+
+## Balance sheet
+
+| | CLEAN | NORMALIZED |
+|---|---|---|
+| Rows | 1336 | **1335** |
+| Columns | 20 | **21** (`municipalite_type`) |
+| `debut_des_travaux` null | 320 (24.0%) | 341 (25.5%) |
+| `fin_des_travaux` null | 667 (49.9%) | **908 (68.0%)** |
+| `arrondissement` null | 0 | 0 |
+| `centro_x` null | 60 (4.5%) | 59 (4.4%) |
+
+The arithmetic reconciles exactly: `fin_des_travaux` gains 241 nulls = 242 `0` sentinels minus the
+rejected row, which already carried one. Same for `debut` (22 sentinels − 1) and for `centro_x`
+(no nullification at all, just the rejected row). Nothing is lost silently.
+
+## What the stage deliberately does not do
+
+No imputation — an absent field stays absent. No rounding, no clamping. **No deduplication**: the
+duplicated `identifiant_batiment` survives, because the two rows differ in content and choosing
+between them needs a business rule nobody has written. And no web-facing shaping — that belongs to
+the frontend build, not to the pipeline.
+
+---
+
+# Data profile
 
 ## 1. What the data actually contains
 
@@ -203,9 +349,15 @@ non-nullable but contain nulls after stage 02:
 | `nom_historique` | `Series[str]` | 30 |
 | `voie` | `Series[str]` | 37 |
 
-`arrondissement` is the only source column that is genuinely non-null (0/1336) and can stay
-required. The other three must either become `nullable=True`, or stage 03 must drop those rows —
-which is the decision recorded in [ADR-004](../adr/ADR-004-data-quality-policy.md).
+[ADR-004](../adr/ADR-004-data-quality-policy.md) resolves this: `identifiant_batiment` stays
+required, because the stage rejects the rows that lack one; `nom_historique` and `voie` become
+`nullable=True`.
+
+`arrondissement` is non-null in the source (0/1336), but it must be **nullable too** — the stage
+nullifies a municipality matching neither a borough nor a known ville liée, so the column can hold
+a null even though the source never does. No row hits that path in the current extract; declaring
+it non-nullable would work today and break on the first refresh that introduces an unknown
+municipality.
 
 The schema also needs a column for the borough/ville-liée distinction introduced in §3, and the
 `centro_x`/`centro_y` bounds already in place (`ge=-74.1, le=-73.4` and `ge=45.3, le=45.8`) are
@@ -216,7 +368,7 @@ confirmed correct by the observed ranges.
 ## Reproducing this profile
 
 Every figure above comes from `data/02_clean/buildings_clean.parquet`, produced by
-`dvc repro` at pipeline version 0.2.0. Regenerate the input with:
+`dvc repro` at pipeline version 0.3.0. Regenerate the input with:
 
 ```bash
 make download

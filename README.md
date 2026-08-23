@@ -7,7 +7,7 @@ This pipeline ingests the **1,336 heritage buildings** published by [Données Mo
 > The source file counts 1,336 records over 2,743 physical lines: 272 buildings carry a multi-paragraph `HISTORIQUE_SOMMAIRE` with embedded newlines. Line counts are not record counts here — see [03-normalize.md](docs/pipeline/03-normalize.md).
 
 ![CI](https://github.com/LudovicJulien/montreal-heritage-ingestion/actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-0.2.0-brightgreen)
+![Version](https://img.shields.io/badge/version-0.3.0-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![DVC](https://img.shields.io/badge/DVC-3.50+-purple)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
@@ -17,20 +17,18 @@ This pipeline ingests the **1,336 heritage buildings** published by [Données Mo
 
 ## Project Status
 
-The pipeline is being built stage by stage. Stages 01 and 02 are implemented, tested, and locked in
-DVC; stages 03 and 04 exist as typed skeletons with their specification written and their design
-decisions recorded.
+The pipeline is being built stage by stage. Stages 01 to 03 are implemented, tested, and locked in
+DVC; stage 04 exists as a typed skeleton.
 
 | Stage | Status | Notes |
 |---|---|---|
 | 01 · Ingest | ✅ **Implemented** | Encoding detection, SHA-256 hashing, idempotence, `RawSchema` |
 | 02 · Clean | ✅ **Implemented** | HTML stripping, ftfy, French typography, `CleanSchema` |
-| 03 · Normalize | 📋 **Specified** | Data profile + quality policy settled — see [03-normalize.md](docs/pipeline/03-normalize.md) and [ADR-004](docs/adr/ADR-004-data-quality-policy.md) |
+| 03 · Normalize | ✅ **Implemented** | Borough canonicalization, sentinel-year nullification, WGS84 validation, `NormalizedSchema` — see [03-normalize.md](docs/pipeline/03-normalize.md) and [ADR-004](docs/adr/ADR-004-data-quality-policy.md) |
 | 04 · Enrich | ⏳ **Planned** | spaCy is not yet a declared dependency |
 
-`dvc repro` currently runs stages 01–02 and stops at `s03_normalize`. The unit tests for stages 03
-and 04, and the end-to-end integration tests, are `@pytest.mark.skip` placeholders naming the cases
-to cover.
+`dvc repro` runs stages 01–03 and stops at `s04_enrich`. The unit tests for stage 04 and the
+end-to-end integration tests are `@pytest.mark.skip` placeholders naming the cases to cover.
 
 ---
 
@@ -69,9 +67,9 @@ data/01_raw/buildings_raw.parquet          <- RawSchema (Pandera)
 data/02_clean/buildings_clean.parquet      <- CleanSchema (Pandera)
          |
          v  [03 · Normalize]
-         |  Pydantic v2 record validation · date range enforcement [1600-2030]
-         |  Montreal bbox coordinate check · 19-borough arrondissement validation
-         |  TYPE_DE_VOIE / EST_OUEST canonical normalization · data quality report
+         |  borough canonicalization (suffix · em dash · apostrophe) + agglomeration allowlist
+         |  sentinel-year nullification [1600-2030] · Montreal WGS84 bbox check
+         |  TYPE_DE_VOIE / EST_OUEST normalization · municipalite_type tagging · quality report
          v
 data/03_normalized/buildings_normalized.parquet   <- NormalizedSchema (Pandera)
          |
@@ -108,16 +106,7 @@ A function-by-function walkthrough of each stage, with real examples from the da
 |-------|-----|
 | 01 · Ingest | [docs/pipeline/01-ingest.md](docs/pipeline/01-ingest.md) |
 | 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
-| 03 · Normalize | [docs/pipeline/03-normalize.md](docs/pipeline/03-normalize.md) — data profile and specification (stage not yet implemented) |
-
-### Stage-by-Stage Documentation
-
-A function-by-function walkthrough of each stage, with real examples from the dataset, lives in [`docs/pipeline/`](docs/pipeline/):
-
-| Stage | Doc |
-|-------|-----|
-| 01 · Ingest | [docs/pipeline/01-ingest.md](docs/pipeline/01-ingest.md) |
-| 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
+| 03 · Normalize | [docs/pipeline/03-normalize.md](docs/pipeline/03-normalize.md) — walkthrough + data profile |
 
 ---
 
@@ -131,7 +120,7 @@ A function-by-function walkthrough of each stage, with real examples from the da
 | Curly apostrophes / guillemets inconsistency | 02 | Custom French typography normalizer |
 | Construction dates outside plausible range | 03 | Pydantic validator: `[1600, 2030]`, nullify on violation |
 | Coordinates outside Montreal island | 03 | `is_in_montreal_bbox()` against WGS84 bbox |
-| Non-canonical borough names | 03 | Validated against official 19-arrondissement list |
+| Borough labels matching no official name | 03 | `canonicalize_municipality()` — suffix, em dash and apostrophe — then the 19 boroughs + 15 villes liées allowlist |
 | Flat text without entity metadata | 04 | spaCy `fr_core_news_lg` batch NER -> structured `BuildingEntities` |
 
 ---
@@ -160,7 +149,7 @@ Each record in `buildings_enriched.jsonl` is a self-contained building object:
   },
   "record_hash": "a3f2c1...",
   "ingested_at": "2026-06-09T14:00:00Z",
-  "pipeline_version": "0.2.0"
+  "pipeline_version": "0.3.0"
 }
 ```
 
@@ -198,7 +187,7 @@ make download      # fetch raw CSV from Données Montréal (~720 KB)
 dvc repro          # run the implemented stages, skip unchanged ones
 ```
 
-> `dvc repro` currently completes stages 01 and 02, then stops at `s03_normalize`, which is not
+> `dvc repro` currently completes stages 01 to 03, then stops at `s04_enrich`, which is not
 > implemented yet. See [Project Status](#project-status).
 
 ### Run a single stage
@@ -258,7 +247,7 @@ cp .env.example .env
 | `INGESTION_RAW_DATA_DIR` | `rawData` | Source CSV directory |
 | `INGESTION_SOURCE_FILE` | `edifices_patrimoine.csv` | Source CSV filename |
 | `INGESTION_DATA_DIR` | `data` | Pipeline output root |
-| `INGESTION_PIPELINE_VERSION` | `0.2.0` | Version stamped on every ingested row |
+| `INGESTION_PIPELINE_VERSION` | `0.3.0` | Version stamped on every ingested row |
 | `INGESTION_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `INGESTION_LOG_FORMAT` | `dev` | `dev` (colored) or `json` (structured, for CI/prod) |
 
@@ -306,7 +295,7 @@ montreal-heritage-ingestion/
 │   ├── unit/                # Isolated tests per utility and stage
 │   └── integration/         # End-to-end pipeline on sample records
 ├── docs/adr/                # Architecture Decision Records
-├── docs/pipeline/           # Stage-by-stage walkthrough (01-ingest.md, 02-clean.md)
+├── docs/pipeline/           # Stage-by-stage walkthrough (01-ingest.md, 02-clean.md, 03-normalize.md)
 ├── data/                    # Pipeline outputs (DVC-tracked, git-ignored)
 │   ├── 01_raw/
 │   ├── 02_clean/

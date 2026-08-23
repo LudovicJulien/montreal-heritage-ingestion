@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ingestion-patrimoine-mtl"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pipeline d'ingestion RAG — Édifices patrimoniaux de Montréal"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -93,4 +93,7 @@ source = ["src"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
-fail_under = 57
+# Actual coverage is ~89% with stages 01-03 landed. The gate sits below that on
+# purpose: implementing a new stage adds uncovered code before its tests land,
+# and a gate flush against the real figure would block work mid-branch.
+fail_under = 80

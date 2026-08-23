@@ -14,14 +14,18 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
+  # Runs the project's own mypy rather than an isolated copy with its own pins.
+  # mirrors-mypy pinned its own pandas-stubs/pandera versions, which drifted from
+  # pyproject and made the hook and `make lint` disagree — to the point where a
+  # `# type: ignore` demanded by one was reported unused by the other.
+  # pass_filenames is off so the hook checks the whole project, exactly like
+  # `make lint`: whole-suite analysis catches errors a per-file run does not.
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies:
-          - pydantic>=2.7
-          - pydantic-settings>=2.2
-          - pandas-stubs>=2.2
-          - pandera>=0.18
-          - types-requests
-          - pytest>=7
+        name: mypy (project environment)
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: [src/, tests/]

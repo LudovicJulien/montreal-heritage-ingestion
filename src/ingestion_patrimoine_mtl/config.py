@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     raw_data_dir: Path = Field(default=Path("rawData"))
     data_dir: Path = Field(default=Path("data"))
     source_file: str = Field(default="edifices_patrimoine.csv")
-    pipeline_version: str = Field(default="0.2.0")
+    pipeline_version: str = Field(default="0.3.0")
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="dev")  # "dev" | "json"
 
