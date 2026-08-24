@@ -23,3 +23,4 @@ ADRs are immutable once accepted. Superseded decisions get a new ADR that refere
 | [ADR-002](ADR-002-dvc-for-pipeline-orchestration.md) | Use DVC for Pipeline Orchestration and Versioning | Accepted |
 | [ADR-003](ADR-003-sha256-row-hashing-for-idempotence.md) | Use SHA-256 Hashing for Row-Level Idempotence | Accepted |
 | [ADR-004](ADR-004-data-quality-policy.md) | Data Quality Policy — Reject, Nullify, or Normalize | Accepted |
+| [ADR-005](ADR-005-rpcq-as-secondary-source.md) | RPCQ as a Secondary Source — Open Data Export Before Scraping | Accepted |
