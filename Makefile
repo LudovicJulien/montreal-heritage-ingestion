@@ -1,7 +1,11 @@
-.PHONY: install format lint test check clean run download
+.PHONY: install format lint test check clean run download rpcq-download
 
 download:
 	python scripts/download_raw_data.py
+
+# Both Données Québec exports (CC-BY 4.0) — classés and cités. See ADR-005.
+rpcq-download:
+	python scripts/download_rpcq_data.py
 
 install:
 	pip install -e ".[dev]"
