@@ -11,6 +11,11 @@ from loguru import logger
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE
 
+# Administrative region label used by both exports for the Montreal agglomeration.
+# It covers the whole island, villes liées included — Baie-D'Urfé and Beaconsfield
+# are in the region without being part of the Ville de Montréal.
+MONTREAL_REGION = "Montréal"
+
 # The reconciled column set: what every downstream stage may rely on, regardless of
 # which export a record came from. Anything outside this list is dropped, including
 # the protected-grounds and protection-area geometries the classés export carries.
@@ -89,7 +94,7 @@ CITES_LAYOUT = _ExportLayout(
 
 
 def run(cfg: Settings) -> pd.DataFrame:
-    """Load both RPCQ exports into a single frame.
+    """Load both RPCQ exports and keep the Montreal region.
 
     This is stage 01b: a parallel ingest path that never touches the Données Montréal
     corpus. The two sources meet at stage 04, which resolves them against each other.
@@ -98,6 +103,14 @@ def run(cfg: Settings) -> pd.DataFrame:
 
     df = _load_exports(cfg)
     logger.info("Loaded {rows} RPCQ records from both open data exports", rows=len(df))
+
+    loaded_rows = len(df)
+    df = _filter_montreal_region(df)
+    logger.info(
+        "Region filter: {kept} record(s) in the Montreal region, {dropped} dropped",
+        kept=len(df),
+        dropped=loaded_rows - len(df),
+    )
     return df
 
 
@@ -230,3 +243,18 @@ def _reconcile_columns(df: pd.DataFrame, renames: Mapping[str, str]) -> pd.DataF
     """
     df = df.rename(columns=dict(renames))
     return df.reindex(columns=RPCQ_COLUMNS)
+
+
+def _filter_montreal_region(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep the records whose administrative region is Montreal.
+
+    The filter is on ``region_admin``, not on ``municipalite``: the region is the
+    whole agglomeration, so filtering on the city name would silently drop the
+    villes liées — Baie-D'Urfé, Beaconsfield, Kirkland, Westmount and the rest —
+    whose buildings are in the Données Montréal corpus stage 04 joins against.
+
+    131 classés plus 48 cités survive, for 175 distinct biens: 4 are both classé
+    and cité and therefore appear once per export.
+    """
+    kept = df["region_admin"] == MONTREAL_REGION
+    return df[kept].reset_index(drop=True)
