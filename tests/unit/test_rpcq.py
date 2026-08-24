@@ -10,6 +10,7 @@ from ingestion_patrimoine_mtl.pipeline.s01b_rpcq import (
     CITES_LAYOUT,
     CLASSES_LAYOUT,
     RPCQ_COLUMNS,
+    _add_metadata,
     _extract_coordinates,
     _filter_montreal_region,
     _load_exports,
@@ -17,8 +18,9 @@ from ingestion_patrimoine_mtl.pipeline.s01b_rpcq import (
     _prepare_export,
     _reconcile_columns,
     _tag_protection_regime,
+    run,
 )
-from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE
+from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE, RpcqRawSchema
 
 
 class TestNormalizeColumnNames:
@@ -180,3 +182,58 @@ class TestTagProtectionRegime:
         df = pd.DataFrame({"bien_id": ["1"]})
         _tag_protection_regime(df, REGIME_CLASSE)
         assert "regime_protection" not in df.columns
+
+
+class TestAddMetadata:
+    def test_source_file_reflects_the_export_of_origin(self, cfg: Settings) -> None:
+        """With two source files, source_file is resolved per row from the regime."""
+        df = pd.DataFrame({"regime_protection": [REGIME_CLASSE, REGIME_CITE]})
+        result = _add_metadata(df, cfg)
+        assert list(result["source_file"]) == [cfg.rpcq_classes_file, cfg.rpcq_cites_file]
+
+    def test_pipeline_version_comes_from_settings(self, cfg: Settings) -> None:
+        """pipeline_version tags the run, so the test version reaches the Parquet."""
+        df = pd.DataFrame({"regime_protection": [REGIME_CLASSE]})
+        result = _add_metadata(df, cfg)
+        assert result.loc[0, "pipeline_version"] == cfg.pipeline_version
+
+
+class TestRunRpcq:
+    def test_parquet_written_to_expected_path(self, rpcq_exports: Settings) -> None:
+        """run() creates the Parquet file at the path returned by cfg.stage_01b_out."""
+        run(rpcq_exports)
+        assert rpcq_exports.stage_01b_out.is_file()
+
+    def test_parquet_passes_rpcq_raw_schema_validation(self, rpcq_exports: Settings) -> None:
+        """The output Parquet satisfies every RpcqRawSchema constraint."""
+        run(rpcq_exports)
+        RpcqRawSchema.validate(pd.read_parquet(rpcq_exports.stage_01b_out))
+
+    def test_row_count_matches_the_montreal_subset(self, rpcq_exports: Settings) -> None:
+        """Only the Montreal-region records are written — 5 of the 7 fixture rows."""
+        run(rpcq_exports)
+        assert len(pd.read_parquet(rpcq_exports.stage_01b_out)) == 5
+
+    def test_record_hashes_are_unique_across_both_exports(self, rpcq_exports: Settings) -> None:
+        """The doubly-protected bien gets two distinct hashes, one per regime."""
+        df = run(rpcq_exports)
+        assert df["record_hash"].nunique() == len(df)
+
+    def test_metadata_columns_are_non_null(self, rpcq_exports: Settings) -> None:
+        """ingested_at, source_file, and pipeline_version are populated for every row."""
+        run(rpcq_exports)
+        df = pd.read_parquet(rpcq_exports.stage_01b_out)
+        for col in ("ingested_at", "source_file", "pipeline_version"):
+            assert col in df.columns, f"missing column: {col}"
+            assert df[col].notna().all(), f"null values found in column: {col}"
+
+    def test_rerun_rewrites_the_full_subset(self, rpcq_exports: Settings) -> None:
+        """Unlike stage 01, 01b has no idempotence filter: stage 04 needs the whole set."""
+        run(rpcq_exports)
+        second = run(rpcq_exports)
+        assert len(second) == 5
+
+    def test_missing_export_raises_file_not_found(self, cfg: Settings) -> None:
+        """run() raises FileNotFoundError immediately when an export is absent."""
+        with pytest.raises(FileNotFoundError, match="RPCQ export not found"):
+            run(cfg)
