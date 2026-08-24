@@ -11,6 +11,7 @@ from ingestion_patrimoine_mtl.pipeline.s01b_rpcq import (
     CLASSES_LAYOUT,
     RPCQ_COLUMNS,
     _extract_coordinates,
+    _filter_montreal_region,
     _load_exports,
     _normalize_column_names,
     _prepare_export,
@@ -131,3 +132,25 @@ class TestExtractCoordinates:
         """76 cited records carry no position; they are kept with null coordinates."""
         df = _prepare_export(rpcq_exports.rpcq_cites_path, CITES_LAYOUT)
         assert pd.isna(df.loc[1, "latitude"])
+
+
+class TestFilterMontrealRegion:
+    def test_out_of_region_records_are_dropped(self, rpcq_exports: Settings) -> None:
+        """Records from other administrative regions do not reach the output."""
+        df = _filter_montreal_region(_load_exports(rpcq_exports))
+        assert set(df["region_admin"]) == {"Montréal"}
+        assert len(df) == 5
+
+    def test_villes_liees_are_kept(self, rpcq_exports: Settings) -> None:
+        """The filter is on the region, so Baie-D'Urfé and Beaconsfield survive.
+
+        Filtering on municipalite == 'Montréal' would drop them, along with every
+        other ville liée of the agglomeration the Données Montréal corpus covers.
+        """
+        df = _filter_montreal_region(_load_exports(rpcq_exports))
+        assert {"Baie-D'Urfé", "Beaconsfield"} <= set(df["municipalite"])
+
+    def test_index_is_reset(self, rpcq_exports: Settings) -> None:
+        """The filtered frame is re-indexed contiguously from zero."""
+        df = _filter_montreal_region(_load_exports(rpcq_exports))
+        assert list(df.index) == list(range(len(df)))
