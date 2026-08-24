@@ -10,6 +10,19 @@ stages:
     outs:
       - data/01_raw/buildings_raw.parquet
 
+  s01b_rpcq:
+    cmd: python -m ingestion_patrimoine_mtl --stage 01b
+    deps:
+      - rawData/rpcq/immeubles_classes.csv
+      - rawData/rpcq/immeubles_cites.csv
+      - src/ingestion_patrimoine_mtl/config.py
+      - src/ingestion_patrimoine_mtl/models.py
+      - src/ingestion_patrimoine_mtl/schemas.py
+      - src/ingestion_patrimoine_mtl/utils/hashing.py
+      - src/ingestion_patrimoine_mtl/pipeline/s01b_rpcq.py
+    outs:
+      - data/01b_rpcq/rpcq_raw.parquet
+
   s02_clean:
     cmd: python -m ingestion_patrimoine_mtl --stage 02
     deps:
