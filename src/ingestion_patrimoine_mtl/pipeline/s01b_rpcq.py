@@ -10,7 +10,7 @@ import pandas as pd
 from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
-from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE
+from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE, RpcqRawSchema
 from ingestion_patrimoine_mtl.utils.hashing import compute_dataframe_hashes
 
 # Administrative region label used by both exports for the Montreal agglomeration.
@@ -42,6 +42,18 @@ RPCQ_COLUMNS = [
     "sous_usage",
     "latitude",
     "longitude",
+    "url_photo",
+]
+
+# Columns whose fill rate on the Montreal subset is worth tracking across refreshes.
+REPORTED_COLS = [
+    "url_rpcq",
+    "description_bien",
+    "synthese_historique",
+    "municipalite",
+    "adresse",
+    "debut_construction",
+    "latitude",
     "url_photo",
 ]
 
@@ -96,7 +108,7 @@ CITES_LAYOUT = _ExportLayout(
 
 
 def run(cfg: Settings) -> pd.DataFrame:
-    """Load both RPCQ exports, keep the Montreal region, and stamp the run metadata.
+    """Load both RPCQ exports, keep the Montreal region, validate and write Parquet.
 
     This is stage 01b: a parallel ingest path that never touches the Données Montréal
     corpus. The two sources meet at stage 04, which resolves them against each other.
@@ -116,6 +128,16 @@ def run(cfg: Settings) -> pd.DataFrame:
 
     df = _add_row_hashes(df)
     df = _add_metadata(df, cfg)
+
+    _log_source_report(df)
+
+    df = _validate_schema(df)
+    _write_parquet(df, cfg.stage_01b_out)
+    logger.info(
+        "Stage 01b complete: {rows} rows written to {path}",
+        rows=len(df),
+        path=cfg.stage_01b_out,
+    )
     return df
 
 
@@ -307,3 +329,53 @@ def _add_metadata(df: pd.DataFrame, cfg: Settings) -> pd.DataFrame:
     df["source_file"] = df["regime_protection"].map(source_files)
     df["pipeline_version"] = cfg.pipeline_version
     return df
+
+
+def _log_source_report(df: pd.DataFrame) -> None:
+    """Log regime counts and fill rates for the Montreal subset.
+
+    The RPCQ is refreshed independently of the Données Montréal corpus and the two
+    exports are years apart in vintage. These counts are what makes a shrinking
+    export or a newly empty column visible on the next run instead of at stage 04.
+    """
+    total = len(df)
+    if not total:
+        logger.warning("Source report skipped: no RPCQ records to report on")
+        return
+
+    regimes = df["regime_protection"].value_counts(dropna=False).to_dict()
+    logger.info("Protection regimes: {regimes}", regimes=regimes)
+    logger.info(
+        "Distinct biens: {distinct}/{total} ({both} bien(s) both classé and cité)",
+        distinct=df["bien_id"].nunique(),
+        total=total,
+        both=total - df["bien_id"].nunique(),
+    )
+
+    for col in REPORTED_COLS:
+        filled = int(df[col].notna().sum())
+        logger.info(
+            "Fill rate {col}: {filled}/{total} ({pct:.1f}%)",
+            col=col,
+            filled=filled,
+            total=total,
+            pct=100 * filled / total,
+        )
+
+
+def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate the DataFrame against RpcqRawSchema; raises SchemaError on violation."""
+    return RpcqRawSchema.validate(df)
+
+
+def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    """Write the validated DataFrame to a snappy-compressed Parquet file.
+
+    The whole Montreal subset is rewritten on every run, with no idempotence filter.
+    Stage 01's filter returns only the rows a previous run has not seen, which is the
+    right contract for an append-oriented corpus; here stage 04 needs the complete
+    RPCQ reference set to match against, and a filtered second run would hand it an
+    empty frame.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, compression="snappy", index=False)
