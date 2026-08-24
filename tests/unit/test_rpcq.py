@@ -16,8 +16,9 @@ from ingestion_patrimoine_mtl.pipeline.s01b_rpcq import (
     _normalize_column_names,
     _prepare_export,
     _reconcile_columns,
+    _tag_protection_regime,
 )
-from ingestion_patrimoine_mtl.schemas import REGIME_CLASSE
+from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE
 
 
 class TestNormalizeColumnNames:
@@ -154,3 +155,28 @@ class TestFilterMontrealRegion:
         """The filtered frame is re-indexed contiguously from zero."""
         df = _filter_montreal_region(_load_exports(rpcq_exports))
         assert list(df.index) == list(range(len(df)))
+
+
+class TestTagProtectionRegime:
+    def test_classes_export_is_tagged_classe(self, rpcq_exports: Settings) -> None:
+        """Every row read from the classés export carries regime_protection == 'classe'."""
+        df = _prepare_export(rpcq_exports.rpcq_classes_path, CLASSES_LAYOUT)
+        assert set(df["regime_protection"]) == {REGIME_CLASSE}
+
+    def test_cites_export_is_tagged_cite(self, rpcq_exports: Settings) -> None:
+        """Every row read from the cités export carries regime_protection == 'cite'."""
+        df = _prepare_export(rpcq_exports.rpcq_cites_path, CITES_LAYOUT)
+        assert set(df["regime_protection"]) == {REGIME_CITE}
+
+    def test_a_bien_in_both_exports_keeps_one_row_per_regime(self, rpcq_exports: Settings) -> None:
+        """A doubly-protected bien stays as two distinguishable rows, not a duplicate."""
+        df = _load_exports(rpcq_exports)
+        both = df[df["bien_id"] == "93001"]
+        assert len(both) == 2
+        assert set(both["regime_protection"]) == {REGIME_CLASSE, REGIME_CITE}
+
+    def test_regime_is_added_without_touching_the_caller_frame(self) -> None:
+        """Tagging returns a copy; the input frame is left unmodified."""
+        df = pd.DataFrame({"bien_id": ["1"]})
+        _tag_protection_regime(df, REGIME_CLASSE)
+        assert "regime_protection" not in df.columns
