@@ -7,6 +7,7 @@ import pandas as pd
 from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class _ExportLayout:
 
     separator: str
     encoding: str
+    regime: str
 
 
 # Immeubles classés (ip_tp_xsl.csv) — 621 records, updated 2026-05-11.
@@ -28,12 +30,14 @@ CLASSES_LAYOUT = _ExportLayout(
     separator=";",
     # utf-8-sig strips the BOM, without which the first column reads "﻿nom_bien".
     encoding="utf-8-sig",
+    regime=REGIME_CLASSE,
 )
 
 # Immeubles cités (donneesouvertesmccipciv3.csv) — 730 records, updated 2023-06-26.
 CITES_LAYOUT = _ExportLayout(
     separator=",",
     encoding="utf-8",
+    regime=REGIME_CITE,
 )
 
 
@@ -79,8 +83,9 @@ def _load_exports(cfg: Settings) -> pd.DataFrame:
 
 
 def _prepare_export(path: Path, layout: _ExportLayout) -> pd.DataFrame:
-    """Read one export with its own CSV dialect."""
-    return _read_csv(path, layout)
+    """Read one export with its own CSV dialect and tag its protection regime."""
+    df = _read_csv(path, layout)
+    return _tag_protection_regime(df, layout.regime)
 
 
 def _read_csv(path: Path, layout: _ExportLayout) -> pd.DataFrame:
@@ -90,3 +95,16 @@ def _read_csv(path: Path, layout: _ExportLayout) -> pd.DataFrame:
     free text (``"vers 1840"``), so casting here would silently nullify them.
     """
     return pd.read_csv(path, sep=layout.separator, encoding=layout.encoding, dtype=str)
+
+
+def _tag_protection_regime(df: pd.DataFrame, regime: str) -> pd.DataFrame:
+    """Record which export a row came from as ``regime_protection``.
+
+    The regime is carried by the file, not by a column: every row of the classés
+    export is ``classe`` and every row of the cités export is ``cite``. Losing it in
+    the concatenation would make the 4 doubly-protected Montreal biens — present in
+    both exports under the same ``bien_id`` — indistinguishable duplicates.
+    """
+    df = df.copy()
+    df["regime_protection"] = regime
+    return df
