@@ -6,7 +6,13 @@ import pandas as pd
 import pandera
 import pytest
 
-from ingestion_patrimoine_mtl.schemas import CleanSchema, NormalizedSchema
+from ingestion_patrimoine_mtl.schemas import (
+    REGIME_CITE,
+    REGIME_CLASSE,
+    CleanSchema,
+    NormalizedSchema,
+    RpcqRawSchema,
+)
 
 
 class TestCleanSchema:
@@ -45,6 +51,85 @@ class TestCleanSchema:
         df = self._valid_df().copy()
         df["ingested_at"] = pd.Timestamp("2026-06-01")
         CleanSchema.validate(df)
+
+
+class TestRpcqRawSchema:
+    def _valid_df(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "bien_id": ["92513"],
+                "url_rpcq": ["http://www.patrimoine-culturel.gouv.qc.ca/rpcq/detail.do?id=92513"],
+                "nom_bien": ["Maisons-magasins Jacob-De Witt I"],
+                "statut_juridique": ["Classement"],
+                "regime_protection": [REGIME_CLASSE],
+                "municipalite": ["Montréal"],
+                "latitude": [45.500323],
+                "longitude": [-73.554973],
+                "record_hash": ["a" * 64],
+                "ingested_at": [pd.Timestamp("2026-08-24", tz="UTC")],
+                "source_file": ["immeubles_classes.csv"],
+                "pipeline_version": ["0.4.0"],
+            }
+        )
+
+    def test_valid_dataframe_passes(self) -> None:
+        RpcqRawSchema.validate(self._valid_df())
+
+    def test_missing_bien_id_raises(self) -> None:
+        df = self._valid_df().drop(columns=["bien_id"])
+        with pytest.raises(pandera.errors.SchemaError):
+            RpcqRawSchema.validate(df)
+
+    def test_null_bien_id_raises(self) -> None:
+        df = self._valid_df().copy()
+        df["bien_id"] = None
+        with pytest.raises(pandera.errors.SchemaError):
+            RpcqRawSchema.validate(df)
+
+    def test_null_coordinates_are_accepted(self) -> None:
+        """2 of the 179 Montreal records carry no position; they stay in the corpus."""
+        df = self._valid_df().copy()
+        df["latitude"] = None
+        df["longitude"] = None
+        RpcqRawSchema.validate(df)
+
+    def test_coordinates_outside_the_montreal_box_raise(self) -> None:
+        """A latitude from the Capitale-Nationale region means the filter let a row through."""
+        df = self._valid_df().copy()
+        df["latitude"] = 46.813
+        with pytest.raises(pandera.errors.SchemaError):
+            RpcqRawSchema.validate(df)
+
+    def test_swapped_coordinates_raise(self) -> None:
+        """Latitude and longitude do not overlap, so an axis swap fails the schema."""
+        df = self._valid_df().copy()
+        df["latitude"], df["longitude"] = -73.554973, 45.500323
+        with pytest.raises(pandera.errors.SchemaError):
+            RpcqRawSchema.validate(df)
+
+    def test_unknown_protection_regime_raises(self) -> None:
+        df = self._valid_df().copy()
+        df["regime_protection"] = "inscrit"
+        with pytest.raises(pandera.errors.SchemaError):
+            RpcqRawSchema.validate(df)
+
+    def test_citation_regime_passes(self) -> None:
+        df = self._valid_df().copy()
+        df["regime_protection"] = REGIME_CITE
+        df["statut_juridique"] = "Citation"
+        RpcqRawSchema.validate(df)
+
+    def test_unlisted_legal_status_is_accepted(self) -> None:
+        """The classés export already holds an 'Avis d'intention' — no allowlist here."""
+        df = self._valid_df().copy()
+        df["statut_juridique"] = "Avis d'intention de classement prorogé"
+        RpcqRawSchema.validate(df)
+
+    def test_short_record_hash_raises(self) -> None:
+        df = self._valid_df().copy()
+        df["record_hash"] = "tooshort"
+        with pytest.raises(pandera.errors.SchemaError):
+            RpcqRawSchema.validate(df)
 
 
 class TestRawSchema:
