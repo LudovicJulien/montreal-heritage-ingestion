@@ -17,17 +17,18 @@ This pipeline ingests the **1,336 heritage buildings** published by [Données Mo
 
 ## Project Status
 
-The pipeline is being built stage by stage. Stages 01 to 03 are implemented, tested, and locked in
-DVC; stage 04 exists as a typed skeleton.
+The pipeline is being built stage by stage. Stages 01, 01b and 02 to 03 are implemented, tested,
+and locked in DVC; stage 04 exists as a typed skeleton.
 
 | Stage | Status | Notes |
 |---|---|---|
 | 01 · Ingest | ✅ **Implemented** | Encoding detection, SHA-256 hashing, idempotence, `RawSchema` |
+| 01b · Ingest RPCQ | ✅ **Implemented** | Second source: two Données Québec exports reconciled into 179 Montreal records, `RpcqRawSchema` — see [01b-rpcq.md](docs/pipeline/01b-rpcq.md) and [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md) |
 | 02 · Clean | ✅ **Implemented** | HTML stripping, ftfy, French typography, `CleanSchema` |
 | 03 · Normalize | ✅ **Implemented** | Borough canonicalization, sentinel-year nullification, WGS84 validation, `NormalizedSchema` — see [03-normalize.md](docs/pipeline/03-normalize.md) and [ADR-004](docs/adr/ADR-004-data-quality-policy.md) |
 | 04 · Enrich | ⏳ **Planned** | spaCy is not yet a declared dependency |
 
-`dvc repro` runs stages 01–03 and stops at `s04_enrich`. The unit tests for stage 04 and the
+`dvc repro` runs stages 01, 01b and 02–03, and stops at `s04_enrich`. The unit tests for stage 04 and the
 end-to-end integration tests are `@pytest.mark.skip` placeholders naming the cases to cover.
 
 ---
@@ -59,6 +60,19 @@ rawData/edifices_patrimoine.csv  (1,336 buildings · 16 columns)
          |  metadata injection (ingested_at, source_file, pipeline_version)
          v
 data/01_raw/buildings_raw.parquet          <- RawSchema (Pandera)
+         |
+         |    Données Québec open data (donneesquebec.ca) — CC-BY 4.0
+         |             |
+         |             v  make rpcq-download
+         |    rawData/rpcq/*.csv  (621 classés + 730 cités)
+         |             |
+         |             v  [01b · Ingest RPCQ]
+         |             |  two column layouts reconciled · WKT -> lat/lon · regime tagging
+         |             |  Montreal region filter (1,351 -> 179) · SHA-256 hashing
+         |             v
+         |    data/01b_rpcq/rpcq_raw.parquet   <- RpcqRawSchema (Pandera)
+         |             |
+         |             '--- joined at stage 04 (fuzzy: no join key exists)
          |
          v  [02 · Clean]
          |  BeautifulSoup HTML stripping · ftfy encoding repair
@@ -97,6 +111,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | [ADR-002](docs/adr/ADR-002-dvc-for-pipeline-orchestration.md) | Why DVC over Airflow, Bash scripts, or Git LFS |
 | [ADR-003](docs/adr/ADR-003-sha256-row-hashing-for-idempotence.md) | Why SHA-256 per-row hashing for idempotent re-runs |
 | [ADR-004](docs/adr/ADR-004-data-quality-policy.md) | When to reject a row, nullify a field, or normalize a value |
+| [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md) | Why the RPCQ open data exports come before scraping |
 
 ### Stage-by-Stage Documentation
 
@@ -105,6 +120,7 @@ A function-by-function walkthrough of each stage, with real examples from the da
 | Stage | Doc |
 |-------|-----|
 | 01 · Ingest | [docs/pipeline/01-ingest.md](docs/pipeline/01-ingest.md) |
+| 01b · Ingest RPCQ | [docs/pipeline/01b-rpcq.md](docs/pipeline/01b-rpcq.md) — walkthrough + open data profile |
 | 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
 | 03 · Normalize | [docs/pipeline/03-normalize.md](docs/pipeline/03-normalize.md) — walkthrough + data profile |
 
@@ -184,6 +200,7 @@ The URL is written to `.dvc/config.local` which is gitignored — your path neve
 
 ```bash
 make download      # fetch raw CSV from Données Montréal (~720 KB)
+make rpcq-download # fetch both RPCQ exports from Données Québec (~4.8 MB)
 dvc repro          # run the implemented stages, skip unchanged ones
 ```
 
@@ -218,6 +235,7 @@ dvc repro --force  # ignore cache, re-run everything
 | `make check` | Run `lint` then `test` in sequence (used in CI) |
 | `make clean` | Remove `__pycache__`, `.coverage`, `htmlcov/`, `.mypy_cache/` |
 | `make download` | Fetch source CSV from Données Montréal |
+| `make rpcq-download` | Fetch both RPCQ exports from Données Québec (CC-BY 4.0) |
 | `make run` | Run the full pipeline via `python -m ingestion_patrimoine_mtl` |
 
 ### Pre-commit hooks
@@ -278,10 +296,11 @@ cp .env.example .env
 montreal-heritage-ingestion/
 ├── src/ingestion_patrimoine_mtl/
 │   ├── config.py            # Pydantic BaseSettings — paths + pipeline flags
-│   ├── models.py            # BuildingRaw · BuildingEntities · BuildingEnriched
+│   ├── models.py            # BuildingRaw · RpcqBuilding · BuildingEntities · BuildingEnriched
 │   ├── schemas.py           # Pandera DataFrame contracts per stage
 │   ├── pipeline/
 │   │   ├── s01_ingest.py    # Encoding detection · hashing · idempotency
+│   │   ├── s01b_rpcq.py     # RPCQ open data · layout reconciliation · region filter
 │   │   ├── s02_clean.py     # HTML · ftfy · French typography
 │   │   ├── s03_normalize.py # Pydantic validation · geo · address normalization
 │   │   └── s04_enrich.py    # spaCy NER · JSONL export
@@ -290,20 +309,22 @@ montreal-heritage-ingestion/
 │       ├── geo.py           # Montreal bbox · Lambert->WGS84 · borough list
 │       └── logging.py       # loguru setup (dev / json)
 ├── scripts/
-│   └── download_raw_data.py # Fetch CSV from Données Montréal + integrity check
+│   ├── download_raw_data.py # Fetch CSV from Données Montréal + integrity check
+│   └── download_rpcq_data.py # Fetch both RPCQ exports from Données Québec
 ├── tests/
 │   ├── unit/                # Isolated tests per utility and stage
 │   └── integration/         # End-to-end pipeline on sample records
 ├── docs/adr/                # Architecture Decision Records
-├── docs/pipeline/           # Stage-by-stage walkthrough (01-ingest.md, 02-clean.md, 03-normalize.md)
+├── docs/pipeline/           # Stage-by-stage walkthrough (01-ingest.md, 01b-rpcq.md, 02-clean.md, 03-normalize.md)
 ├── data/                    # Pipeline outputs (DVC-tracked, git-ignored)
 │   ├── 01_raw/
+│   ├── 01b_rpcq/
 │   ├── 02_clean/
 │   ├── 03_normalized/
 │   └── 04_enriched/
 ├── .env.example             # Environment variable reference
-├── dvc.yaml                 # 4-stage DVC pipeline definition
-└── rawData/                 # Source CSV (git-ignored, reproducible via make download)
+├── dvc.yaml                 # 5-stage DVC pipeline definition
+└── rawData/                 # Source CSVs (git-ignored, reproducible via make download / rpcq-download)
 ```
 
 ---
