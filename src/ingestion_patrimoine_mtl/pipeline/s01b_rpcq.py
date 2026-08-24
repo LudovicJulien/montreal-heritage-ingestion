@@ -146,6 +146,7 @@ def _load_exports(cfg: Settings) -> pd.DataFrame:
 def _prepare_export(path: Path, layout: _ExportLayout) -> pd.DataFrame:
     """Read one export and bring it onto the reconciled layout."""
     df = _read_csv(path, layout)
+    df = _normalize_column_names(df)
     df = _tag_protection_regime(df, layout.regime)
     df = _extract_coordinates(df)
     return _reconcile_columns(df, layout.renames)
@@ -158,6 +159,18 @@ def _read_csv(path: Path, layout: _ExportLayout) -> pd.DataFrame:
     free text (``"vers 1840"``), so casting here would silently nullify them.
     """
     return pd.read_csv(path, sep=layout.separator, encoding=layout.encoding, dtype=str)
+
+
+def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Strip and lowercase column names, the convention every stage assumes.
+
+    The classés export mixes cases within one header row (``Wkt_Multipoint_XY``
+    next to ``nom_bien``), so this is not a no-op even though most names are
+    already lowercase.
+    """
+    df = df.copy()
+    df.columns = df.columns.str.strip().str.lower()
+    return df
 
 
 def _tag_protection_regime(df: pd.DataFrame, regime: str) -> pd.DataFrame:
