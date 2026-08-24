@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -10,6 +11,7 @@ from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.schemas import REGIME_CITE, REGIME_CLASSE
+from ingestion_patrimoine_mtl.utils.hashing import compute_dataframe_hashes
 
 # Administrative region label used by both exports for the Montreal agglomeration.
 # It covers the whole island, villes liées included — Baie-D'Urfé and Beaconsfield
@@ -94,7 +96,7 @@ CITES_LAYOUT = _ExportLayout(
 
 
 def run(cfg: Settings) -> pd.DataFrame:
-    """Load both RPCQ exports and keep the Montreal region.
+    """Load both RPCQ exports, keep the Montreal region, and stamp the run metadata.
 
     This is stage 01b: a parallel ingest path that never touches the Données Montréal
     corpus. The two sources meet at stage 04, which resolves them against each other.
@@ -111,6 +113,9 @@ def run(cfg: Settings) -> pd.DataFrame:
         kept=len(df),
         dropped=loaded_rows - len(df),
     )
+
+    df = _add_row_hashes(df)
+    df = _add_metadata(df, cfg)
     return df
 
 
@@ -271,3 +276,34 @@ def _filter_montreal_region(df: pd.DataFrame) -> pd.DataFrame:
     """
     kept = df["region_admin"] == MONTREAL_REGION
     return df[kept].reset_index(drop=True)
+
+
+def _add_row_hashes(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute a deterministic SHA-256 per row and insert it as column record_hash.
+
+    Same rule as stage 01 (ADR-003): the hash covers the reconciled source columns
+    only, before ingested_at / source_file / pipeline_version are appended, so it
+    stays stable across runs of unchanged data. ``regime_protection`` is inside the
+    hash — it is a fact about the record, not about the run, and it is what tells
+    the two rows of a doubly-protected bien apart.
+    """
+    df = df.copy()
+    df["record_hash"] = compute_dataframe_hashes(df)
+    return df
+
+
+def _add_metadata(df: pd.DataFrame, cfg: Settings) -> pd.DataFrame:
+    """Append ingested_at (UTC), source_file, and pipeline_version columns.
+
+    Unlike stage 01 there are two source files, so source_file is resolved per row
+    from the protection regime rather than read off a single setting.
+    """
+    source_files = {
+        REGIME_CLASSE: cfg.rpcq_classes_file,
+        REGIME_CITE: cfg.rpcq_cites_file,
+    }
+    df = df.copy()
+    df["ingested_at"] = datetime.now(UTC)
+    df["source_file"] = df["regime_protection"].map(source_files)
+    df["pipeline_version"] = cfg.pipeline_version
+    return df
