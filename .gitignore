@@ -38,6 +38,7 @@ docs/tmp/
 
 # Data pipeline outputs (trackés par DVC, pas par git)
 data/01_raw/*.parquet
+data/01b_rpcq/*.parquet
 data/02_clean/*.parquet
 data/03_normalized/*.parquet
 data/04_enriched/*.jsonl

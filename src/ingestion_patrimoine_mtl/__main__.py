@@ -14,7 +14,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--stage",
-        choices=["01", "02", "03", "04", "all"],
+        choices=["01", "01b", "02", "03", "04", "all"],
         default="all",
         help="Pipeline stage to run (default: all)",
     )
@@ -37,10 +37,17 @@ def main() -> int:
 
     setup_logging(level=args.log_level, fmt=args.log_format)
 
-    from ingestion_patrimoine_mtl.pipeline import s01_ingest, s02_clean, s03_normalize, s04_enrich
+    from ingestion_patrimoine_mtl.pipeline import (
+        s01_ingest,
+        s01b_rpcq,
+        s02_clean,
+        s03_normalize,
+        s04_enrich,
+    )
 
     stages = {
         "01": s01_ingest.run,
+        "01b": s01b_rpcq.run,
         "02": s02_clean.run,
         "03": s03_normalize.run,
         "04": s04_enrich.run,
