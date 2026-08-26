@@ -43,13 +43,3 @@ stages:
       - src/ingestion_patrimoine_mtl/pipeline/s03_normalize.py
     outs:
       - data/03_normalized/buildings_normalized.parquet
-
-  s04_enrich:
-    cmd: python -m ingestion_patrimoine_mtl --stage 04
-    deps:
-      - data/03_normalized/buildings_normalized.parquet
-      - src/ingestion_patrimoine_mtl/config.py
-      - src/ingestion_patrimoine_mtl/models.py
-      - src/ingestion_patrimoine_mtl/pipeline/s04_enrich.py
-    outs:
-      - data/04_enriched/buildings_enriched.jsonl

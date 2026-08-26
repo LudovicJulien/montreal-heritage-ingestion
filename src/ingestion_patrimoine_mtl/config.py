@@ -64,8 +64,8 @@ class Settings(BaseSettings):
         return self.data_dir / "03_normalized" / "buildings_normalized.parquet"
 
     @property
-    def stage_04_out(self) -> Path:
-        return self.data_dir / "04_enriched" / "buildings_enriched.jsonl"
+    def stage_05_out(self) -> Path:
+        return self.data_dir / "05_enriched" / "buildings_enriched.jsonl"
 
 
 settings = Settings()

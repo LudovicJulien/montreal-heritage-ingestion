@@ -9,7 +9,13 @@ from ingestion_patrimoine_mtl.models import BuildingEntities
 
 
 def run(cfg: Settings) -> None:
-    """Extract NER entities and export to JSONL for the RAG engine."""
+    """Extract NER entities and export to JSONL.
+
+    This is stage 05. It used to be stage 04, before the RPCQ became a second
+    source: enriching a corpus that has not been reconciled with the RPCQ yet
+    means running the NER twice, since stage 04 fills the missing historical
+    prose the NER reads.
+    """
     raise NotImplementedError
 
 
