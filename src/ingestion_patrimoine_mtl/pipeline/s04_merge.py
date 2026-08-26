@@ -37,6 +37,17 @@ DISTANCE_WEIGHT = 1.0 - NAME_WEIGHT
 METHOD_EXACT_NAME = "exact_name"
 METHOD_NAME_DISTANCE = "name_distance"
 
+# Minimum score for a pair to be accepted. Calibrated by reading the ranked pairs
+# of the reference extract: above 0.70 the list is clean, and the band just below
+# is where "Fonderie Darling" starts meeting "Édifices de la Darling Brothers" —
+# related biens, not the same one.
+MATCH_THRESHOLD = 0.70
+
+# How far the runner-up must sit below the best candidate for the best to count as
+# identified. Within this margin the two are indistinguishable and ADR-004 applies:
+# the pair is logged and left unresolved rather than settled on a third decimal.
+MATCH_MARGIN = 0.05
+
 # Columns holding one value per protection regime rather than one per bien: a
 # bien that is both classé and cité carries two of each. Every other column is
 # identical across the two rows.
@@ -66,8 +77,9 @@ def run(cfg: Settings) -> pd.DataFrame:
     )
 
     scored = _score_candidates(candidates, buildings, rpcq)
+    matches, _ambiguous = _select_matches(scored)
 
-    return scored
+    return matches
 
 
 def _load_sources(cfg: Settings) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -263,3 +275,77 @@ def _name_similarity(one: str | None, other: str | None) -> float:
     if not one or not other:
         return 0.0
     return SequenceMatcher(None, one, other).ratio()
+
+
+def _select_matches(scored: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Keep the best candidate per building, unless it cannot be told from the next.
+
+    Two rules, in order:
+
+    1. A candidate below MATCH_THRESHOLD is discarded. Not "kept with a low
+       confidence flag" — a link nobody would act on is noise in a crosswalk that
+       stage 06 turns into a public link out to the RPCQ.
+    2. Of the candidates that clear the threshold, the best is accepted only if the
+       runner-up sits at least MATCH_MARGIN below it. Otherwise the pair is
+       **ambiguous**: both are returned in the second frame, logged at WARNING, and
+       the building is left unmatched.
+
+    Rule 2 is ADR-004 applied to entity resolution. The reference extract makes the
+    case concretely: "Maisons Charles-Sheppard" is four adjacent, identical row
+    houses, and the RPCQ holds "Charles-Sheppard 1" through "4" a couple of metres
+    apart. Every pairing scores within 0.006 of every other. Picking the top one
+    would fabricate a link indistinguishable from a real one downstream, exactly
+    like clamping 9999 to 2030 fabricates a construction date.
+
+    A bien matching several buildings is *not* ambiguous and is left alone: an
+    RPCQ bien can legitimately be an ensemble covering a whole terrace. The
+    resolution only has to be a function on the building side, where each record
+    describes exactly one building.
+
+    Returns (matches, ambiguous) — the first with one row per matched building.
+    """
+    eligible = scored[scored["score"] >= MATCH_THRESHOLD]
+    if eligible.empty:
+        return eligible.copy(), eligible.copy()
+
+    ranked = eligible.sort_values(
+        ["identifiant_batiment", "score"], ascending=[True, False], kind="stable"
+    )
+    best = ranked.groupby("identifiant_batiment", sort=False).head(1)
+    runner_up = ranked.groupby("identifiant_batiment", sort=False).nth(1)
+
+    contested = runner_up.set_index("identifiant_batiment")["score"]
+    gap = best["identifiant_batiment"].map(contested)
+    # A building with a single eligible candidate has no runner-up and no gap to
+    # measure; NaN must read as "identified", not as "too close to call".
+    resolved = gap.isna() | ((best["score"] - gap) >= MATCH_MARGIN)
+
+    matches = best[resolved.to_numpy()]
+    ambiguous = ranked[
+        ranked["identifiant_batiment"].isin(best.loc[~resolved.to_numpy(), "identifiant_batiment"])
+    ]
+    _log_ambiguous_pairs(ambiguous)
+    return matches.reset_index(drop=True), ambiguous.reset_index(drop=True)
+
+
+def _log_ambiguous_pairs(ambiguous: pd.DataFrame) -> None:
+    """Log every unresolved building and the biens it could not be told apart from.
+
+    Logged one line per building rather than as a count: this is the queue a human
+    reviews, and a bare number gives them nothing to review.
+    """
+    if ambiguous.empty:
+        return
+
+    for identifier, group in ambiguous.groupby("identifiant_batiment", sort=True):
+        logger.warning(
+            "Ambiguous match for {identifier}: {n} candidates within {margin} "
+            "({candidates}) — left unresolved (ADR-004)",
+            identifier=identifier,
+            n=len(group),
+            margin=MATCH_MARGIN,
+            candidates=", ".join(
+                f"{bien_id}={score:.3f}"
+                for bien_id, score in zip(group["bien_id"], group["score"], strict=True)
+            ),
+        )
