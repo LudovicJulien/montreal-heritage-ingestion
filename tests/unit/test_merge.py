@@ -187,3 +187,54 @@ class TestHistoriqueSommaire:
         merged = run(merge_sources)
 
         assert "Synthèse orpheline." not in set(merged["historique_sommaire"].dropna())
+
+
+class TestRowCountPreservation:
+    def test_output_holds_exactly_the_input_rows(
+        self, merge_sources: Settings, sample_normalized_df: pd.DataFrame
+    ) -> None:
+        """The merge enriches — unlike stage 03, it neither rejects nor degrades a record."""
+        merged = run(merge_sources)
+
+        assert len(merged) == len(sample_normalized_df)
+
+    def test_no_identifier_is_lost_and_none_is_added(
+        self, merge_sources: Settings, sample_normalized_df: pd.DataFrame
+    ) -> None:
+        """A count can stay right while the contents drift; assert on the identities."""
+        merged = run(merge_sources)
+
+        assert list(merged["identifiant_batiment"]) == list(
+            sample_normalized_df["identifiant_batiment"]
+        )
+
+    def test_a_bien_matching_several_buildings_does_not_fan_out(
+        self, merge_sources: Settings, sample_normalized_df: pd.DataFrame
+    ) -> None:
+        """The one failure mode that inflates a left join, forced on the fixture.
+
+        An RPCQ bien may legitimately cover several buildings — an ensemble over a
+        whole terrace — which is allowed. What must not happen is the corpus
+        growing a row for it. Both buildings resolve to 92514 here, and the frame
+        stays the same length.
+        """
+        buildings = sample_normalized_df.copy()
+        buildings.loc[buildings.index[2], ["nom_historique", "centro_x", "centro_y"]] = [
+            "Édifice Aldred",
+            -73.5681,
+            45.5021,
+        ]
+        buildings.to_parquet(merge_sources.stage_03_out, compression="snappy", index=False)
+
+        merged = run(merge_sources)
+
+        assert (merged["bien_id"] == "92514").sum() == 2
+        assert len(merged) == len(buildings)
+
+    def test_the_stage_is_idempotent_over_reruns(self, merge_sources: Settings) -> None:
+        """Nothing accumulates: the merge rewrites the corpus rather than appending to it."""
+        first = run(merge_sources)
+        second = run(merge_sources)
+
+        assert len(first) == len(second)
+        assert list(first["bien_id"].fillna("")) == list(second["bien_id"].fillna(""))
