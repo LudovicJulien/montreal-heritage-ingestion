@@ -11,11 +11,16 @@ from loguru import logger
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.pipeline.s04_merge import (
     CANDIDATE_RADIUS_M,
+    CROSSWALK_COLUMNS,
     MATCH_THRESHOLD,
     METHOD_EXACT_NAME,
     run,
 )
-from ingestion_patrimoine_mtl.schemas import TEXT_SOURCE_CORPUS, TEXT_SOURCE_RPCQ
+from ingestion_patrimoine_mtl.schemas import (
+    TEXT_SOURCE_CORPUS,
+    TEXT_SOURCE_RPCQ,
+    MergedSchema,
+)
 
 
 def _crosswalk(cfg: Settings) -> pd.DataFrame:
@@ -238,3 +243,45 @@ class TestRowCountPreservation:
 
         assert len(first) == len(second)
         assert list(first["bien_id"].fillna("")) == list(second["bien_id"].fillna(""))
+
+
+class TestRun:
+    def test_writes_the_merged_corpus_to_the_configured_path(self, merge_sources: Settings) -> None:
+        """The path comes from Settings, which is what lets tests relocate the pipeline."""
+        run(merge_sources)
+
+        assert merge_sources.stage_04_out.is_file()
+
+    def test_writes_the_crosswalk_beside_it(self, merge_sources: Settings) -> None:
+        """Two artifacts, two grains: 1335 rows of corpus against 149 of crosswalk."""
+        run(merge_sources)
+
+        assert merge_sources.stage_04_crosswalk.is_file()
+
+    def test_the_written_parquet_validates_against_mergedschema(
+        self, merge_sources: Settings
+    ) -> None:
+        """Reading back is the real check: the dtypes must survive the pyarrow round trip."""
+        run(merge_sources)
+
+        written = pd.read_parquet(merge_sources.stage_04_out)
+        MergedSchema.validate(written)
+
+    def test_the_written_parquet_matches_the_returned_frame(self, merge_sources: Settings) -> None:
+        """run() returns what it wrote, so a caller need not read the file back."""
+        returned = run(merge_sources)
+
+        written = pd.read_parquet(merge_sources.stage_04_out)
+        pd.testing.assert_frame_equal(written, returned)
+
+    def test_the_crosswalk_carries_its_evidence_columns(self, merge_sources: Settings) -> None:
+        """Score, method and distance are what make MATCH_THRESHOLD reviewable."""
+        run(merge_sources)
+
+        crosswalk = _crosswalk(merge_sources)
+        assert list(crosswalk.columns) == CROSSWALK_COLUMNS
+
+    def test_a_missing_normalized_input_fails_loudly(self, cfg: Settings) -> None:
+        """No silent empty corpus when stage 03 has not run."""
+        with pytest.raises(FileNotFoundError):
+            run(cfg)
