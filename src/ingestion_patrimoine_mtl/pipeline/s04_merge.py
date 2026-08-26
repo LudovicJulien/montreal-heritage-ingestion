@@ -8,6 +8,11 @@ import pandas as pd
 from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.schemas import (
+    TEXT_SOURCE_CORPUS,
+    TEXT_SOURCE_RPCQ,
+    MergedSchema,
+)
 from ingestion_patrimoine_mtl.utils.matching import haversine_distance_m, normalize_name
 
 # Radius of the candidate search around each building, in metres.
@@ -70,11 +75,6 @@ RPCQ_JOINED_COLS = [
 # tell an RPCQ-backed record from one the corpus stands behind alone.
 MATCH_COLS = ["bien_id", "match_score", "match_method"]
 
-# Records the provenance of historique_sommaire once the RPCQ has filled some of
-# the gaps, so a consumer never has to guess which corpus wrote a given text.
-TEXT_SOURCE_CORPUS = "donnees_montreal"
-TEXT_SOURCE_RPCQ = "rpcq"
-
 # Columns holding one value per protection regime rather than one per bien: a
 # bien that is both classé and cité carries two of each. Every other column is
 # identical across the two rows.
@@ -112,6 +112,13 @@ def run(cfg: Settings) -> pd.DataFrame:
     merged = _join_rpcq_fields(buildings, crosswalk, rpcq)
     merged = _fill_historique_sommaire(merged)
 
+    merged = _validate_schema(merged)
+    _write_parquet(merged, cfg.stage_04_out)
+    logger.info(
+        "Stage 04 complete: {rows} rows written to {path}",
+        rows=len(merged),
+        path=cfg.stage_04_out,
+    )
     return merged
 
 
@@ -397,6 +404,11 @@ def _build_crosswalk(matches: pd.DataFrame) -> pd.DataFrame:
     """
     crosswalk = matches.reindex(columns=CROSSWALK_COLUMNS)
     return crosswalk.sort_values("score", ascending=False, kind="stable").reset_index(drop=True)
+
+
+def _validate_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate the DataFrame against MergedSchema; raises SchemaError on violation."""
+    return MergedSchema.validate(df)
 
 
 def _write_parquet(df: pd.DataFrame, path: Path) -> None:
