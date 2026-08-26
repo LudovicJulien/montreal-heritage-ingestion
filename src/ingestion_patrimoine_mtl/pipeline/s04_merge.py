@@ -70,6 +70,11 @@ RPCQ_JOINED_COLS = [
 # tell an RPCQ-backed record from one the corpus stands behind alone.
 MATCH_COLS = ["bien_id", "match_score", "match_method"]
 
+# Records the provenance of historique_sommaire once the RPCQ has filled some of
+# the gaps, so a consumer never has to guess which corpus wrote a given text.
+TEXT_SOURCE_CORPUS = "donnees_montreal"
+TEXT_SOURCE_RPCQ = "rpcq"
+
 # Columns holding one value per protection regime rather than one per bien: a
 # bien that is both classé and cité carries two of each. Every other column is
 # identical across the two rows.
@@ -105,6 +110,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     _write_parquet(crosswalk, cfg.stage_04_crosswalk)
 
     merged = _join_rpcq_fields(buildings, crosswalk, rpcq)
+    merged = _fill_historique_sommaire(merged)
 
     return merged
 
@@ -433,3 +439,43 @@ def _join_rpcq_fields(
         how="left",
         validate="many_to_one",
     )
+
+
+def _fill_historique_sommaire(df: pd.DataFrame) -> pd.DataFrame:
+    """Fill a null historique_sommaire from synthese_historique, never overwrite one.
+
+    This is the reason the merge exists. ``historique_sommaire`` is the thinnest
+    column of the corpus — 296 of 1335 records, 22.2 % — and it is the only text
+    the NER of stage 05 has to read. The RPCQ carries its own historical prose for
+    the biens it covers, and 130 of the matched buildings have one where the corpus
+    has none: 296 becomes 426, 31.9 %.
+
+    Where the corpus already has a text, it wins. Not because it is better — the
+    RPCQ synthèses are often longer — but because overwriting is an unreviewable
+    edit: the original is gone, and a wrong match at 0.71 would silently rewrite
+    the history of a building nobody would think to re-check. Filling a null is
+    additive and reversible; replacing a value is neither.
+
+    ``historique_source`` records which corpus wrote the text that survived, so
+    the distinction stays legible downstream instead of being inferable only from
+    the presence of a bien_id.
+    """
+    df = df.copy()
+    existing = df["historique_sommaire"]
+    incoming = df["synthese_historique"]
+
+    filled = existing.isna() & incoming.notna()
+    df["historique_sommaire"] = existing.where(existing.notna(), incoming)
+    df["historique_source"] = pd.Series(TEXT_SOURCE_CORPUS, index=df.index, dtype="object").where(
+        existing.notna(), None
+    )
+    df.loc[filled, "historique_source"] = TEXT_SOURCE_RPCQ
+
+    logger.info(
+        "historique_sommaire: {before} present before, {after} after "
+        "({filled} filled from the RPCQ synthèse)",
+        before=int(existing.notna().sum()),
+        after=int(df["historique_sommaire"].notna().sum()),
+        filled=int(filled.sum()),
+    )
+    return df
