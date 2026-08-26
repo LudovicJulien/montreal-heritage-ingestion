@@ -223,3 +223,157 @@ def rpcq_exports(
     sample_rpcq_classes_df.to_csv(cfg.rpcq_classes_path, sep=";", index=False, encoding="utf-8-sig")
     sample_rpcq_cites_df.to_csv(cfg.rpcq_cites_path, sep=",", index=False, encoding="utf-8")
     return cfg
+
+
+@pytest.fixture
+def sample_normalized_df() -> pd.DataFrame:
+    """Six records in stage 03 output layout, one per stage 04 matching case.
+
+    Row 0 has an exact RPCQ namesake 3 m away *and* a historique_sommaire of its
+    own. Row 1 has one too but no text, so the RPCQ synthèse fills it. Row 2 has an
+    exact namesake 2 km away, outside the candidate radius. Row 3 sits between two
+    near-identical biens and is the ambiguous case. Row 4 carries no coordinates
+    and therefore no candidate. Row 5 has no bien anywhere near it.
+    """
+    return pd.DataFrame(
+        {
+            "identifiant_batiment": [
+                "0039-27-4599-00",
+                "0039-27-4600-00",
+                "0039-27-4601-00",
+                "0039-27-4602-00",
+                "0039-27-4603-00",
+                "0039-27-4604-00",
+            ],
+            "nom_historique": [
+                "Maison Hurtubise",
+                "Édifice Aldred",
+                "Théâtre Outremont",
+                "Maisons Charles-Sheppard",
+                "Monument-National",
+                "Maison sans voisine",
+            ],
+            "voie": [
+                "McGill",
+                "Saint-Jacques",
+                "Bernard",
+                "Sheppard",
+                "Saint-Laurent",
+                "Bord-du-Lac",
+            ],
+            "arrondissement": [
+                "Ville-Marie",
+                "Ville-Marie",
+                "Outremont",
+                "Ville-Marie",
+                "Ville-Marie",
+                "Senneville",
+            ],
+            "municipalite_type": [
+                "arrondissement",
+                "arrondissement",
+                "arrondissement",
+                "arrondissement",
+                "arrondissement",
+                "ville_liee",
+            ],
+            "historique_sommaire": [
+                "Texte historique déjà présent dans le corpus.",
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            # centro_x is the LONGITUDE, centro_y the latitude.
+            "centro_x": [-73.5673, -73.5680, -73.5900, -73.5660, None, -73.9500],
+            "centro_y": [45.5017, 45.5020, 45.5100, 45.5030, None, 45.4200],
+            "record_hash": ["a" * 64, "b" * 64, "c" * 64, "d" * 64, "e" * 64, "f" * 64],
+        }
+    )
+
+
+@pytest.fixture
+def sample_rpcq_df() -> pd.DataFrame:
+    """Seven RPCQ records in stage 01b output layout, for six distinct biens.
+
+    92513 appears twice — classé *and* cité, like the 4 real doubly-protected
+    Montreal biens — so the merge has to collapse it before matching or it turns
+    into a false ambiguity. 92516 and 92517 are the two near-identical neighbours
+    row 3 of the corpus cannot be told apart from. 92518 has no coordinates and can
+    never be matched.
+    """
+    return pd.DataFrame(
+        {
+            "bien_id": ["92513", "92513", "92514", "92515", "92516", "92517", "92518"],
+            "nom_bien": [
+                "Hurtubise",
+                "Hurtubise",
+                "Aldred",
+                "Théâtre Outremont",
+                "Charles-Sheppard 1",
+                "Charles-Sheppard 2",
+                "Bien sans coordonnées",
+            ],
+            "statut_juridique": [
+                "Classement",
+                "Citation",
+                "Classement",
+                "Classement",
+                "Citation",
+                "Citation",
+                "Classement",
+            ],
+            "regime_protection": ["classe", "cite", "classe", "classe", "cite", "cite", "classe"],
+            "synthese_historique": [
+                "Synthèse du RPCQ pour Hurtubise.",
+                "Synthèse du RPCQ pour Hurtubise.",
+                "Synthèse du RPCQ pour Aldred.",
+                "Synthèse du RPCQ pour le théâtre.",
+                None,
+                None,
+                "Synthèse orpheline.",
+            ],
+            "url_rpcq": [
+                "http://rpcq.test/92513",
+                "http://rpcq.test/92513",
+                "http://rpcq.test/92514",
+                "http://rpcq.test/92515",
+                "http://rpcq.test/92516",
+                "http://rpcq.test/92517",
+                "http://rpcq.test/92518",
+            ],
+            "url_photo": [
+                "http://rpcq.test/92513.jpg",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            "latitude": [45.50172, 45.50172, 45.50201, 45.52800, 45.50301, 45.50299, None],
+            "longitude": [-73.56731, -73.56731, -73.56801, -73.59000, -73.56601, -73.56599, None],
+        }
+    )
+
+
+@pytest.fixture
+def merge_sources(
+    cfg: Settings,
+    sample_normalized_df: pd.DataFrame,
+    sample_rpcq_df: pd.DataFrame,
+) -> Settings:
+    """Write both stage 04 inputs at their configured paths.
+
+    The merge reads Parquet, not DataFrames, so the fixture goes through the real
+    artifacts — which is also what makes the round trip through pyarrow part of
+    what the tests cover.
+    """
+    for path, frame in (
+        (cfg.stage_03_out, sample_normalized_df),
+        (cfg.stage_01b_out, sample_rpcq_df),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_parquet(path, compression="snappy", index=False)
+    return cfg
