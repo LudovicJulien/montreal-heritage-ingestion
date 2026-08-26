@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pandas as pd
+import pytest
+from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.pipeline.s04_merge import (
     CANDIDATE_RADIUS_M,
+    MATCH_THRESHOLD,
     METHOD_EXACT_NAME,
     run,
 )
@@ -15,6 +20,21 @@ from ingestion_patrimoine_mtl.pipeline.s04_merge import (
 def _crosswalk(cfg: Settings) -> pd.DataFrame:
     """Read back the crosswalk a run has just written."""
     return pd.read_parquet(cfg.stage_04_crosswalk)
+
+
+@pytest.fixture
+def captured_warnings() -> Iterator[list[str]]:
+    """Collect the WARNING lines a run emits.
+
+    loguru does not go through the stdlib logging module, so caplog sees nothing;
+    a sink is the only way to assert on what the stage told the operator.
+    """
+    messages: list[str] = []
+    sink_id = logger.add(lambda message: messages.append(message), level="WARNING")
+    try:
+        yield messages
+    finally:
+        logger.remove(sink_id)
 
 
 class TestCandidateMatching:
@@ -63,3 +83,61 @@ class TestCandidateMatching:
 
         crosswalk = _crosswalk(merge_sources)
         assert (crosswalk["bien_id"] == "92513").sum() == 1
+
+
+class TestAmbiguousPairs:
+    def test_two_indistinguishable_biens_leave_the_building_unmatched(
+        self, merge_sources: Settings
+    ) -> None:
+        """Two biens named "Charles-Sheppard 1" and "2", metres apart, cannot both be it.
+
+        This is ADR-004 applied to entity resolution: the top candidate is not
+        picked just because it happens to sort first. On the real extract this is
+        the Charles-Sheppard and Janvier-Arthur-Vaillancourt terraces — four and
+        three identical row houses against as many identically-named biens.
+        """
+        merged = run(merge_sources)
+
+        ambiguous = merged.set_index("identifiant_batiment").loc["0039-27-4602-00"]
+        assert pd.isna(ambiguous["bien_id"])
+        assert pd.isna(ambiguous["match_score"])
+
+    def test_an_ambiguous_building_is_absent_from_the_crosswalk(
+        self, merge_sources: Settings
+    ) -> None:
+        """Unresolved means unresolved: no row, not a row with a low score."""
+        run(merge_sources)
+
+        crosswalk = _crosswalk(merge_sources)
+        assert "0039-27-4602-00" not in set(crosswalk["identifiant_batiment"])
+
+    def test_neither_competing_bien_is_claimed_by_the_ambiguous_building(
+        self, merge_sources: Settings
+    ) -> None:
+        """Refusing the pair must not quietly award the bien to someone else either."""
+        run(merge_sources)
+
+        crosswalk = _crosswalk(merge_sources)
+        assert not set(crosswalk["bien_id"]) & {"92516", "92517"}
+
+    def test_the_ambiguity_is_logged_with_its_candidates(
+        self, merge_sources: Settings, captured_warnings: list[str]
+    ) -> None:
+        """A count would tell an operator nothing; the log names the competing biens.
+
+        This is a review queue, and what makes it reviewable is that the line
+        carries the building, every candidate and its score.
+        """
+        run(merge_sources)
+
+        warnings = [line for line in captured_warnings if "0039-27-4602-00" in line]
+        assert len(warnings) == 1
+        assert "92516" in warnings[0]
+        assert "92517" in warnings[0]
+
+    def test_every_accepted_score_clears_the_threshold(self, merge_sources: Settings) -> None:
+        """A pair below the threshold is dropped, never kept behind a confidence flag."""
+        run(merge_sources)
+
+        crosswalk = _crosswalk(merge_sources)
+        assert (crosswalk["score"] >= MATCH_THRESHOLD).all()
