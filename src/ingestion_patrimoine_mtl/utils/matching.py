@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
+
+# Mean Earth radius (IUGG), in metres. Over the few hundred metres this module
+# ever measures, the choice of radius moves the result by centimetres.
+EARTH_RADIUS_M = 6371008.8
 
 # Words that describe what a building *is* rather than which building it is. The
 # two sources disagree on them systematically — the corpus writes "Maison
@@ -68,3 +73,27 @@ def normalize_name(name: str | None) -> str | None:
         tokens = tokens[1:]
 
     return " ".join(tokens) or None
+
+
+def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Return the great-circle distance in metres between two WGS84 positions.
+
+    Haversine on a sphere rather than a geodesic on the ellipsoid: at the scale
+    this is used for — a 150 m radius around a Montreal building — the two agree
+    to well under a metre, and this needs no dependency.
+
+    Both sources are already in WGS84, so no projection is involved. Mind the
+    argument order: latitude first. The corpus stores the longitude in
+    ``centro_x`` and the latitude in ``centro_y``, and feeding them in written
+    order would compute the distance between two points in Somalia.
+    """
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = phi2 - phi1
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(delta_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_M * math.asin(math.sqrt(a))
