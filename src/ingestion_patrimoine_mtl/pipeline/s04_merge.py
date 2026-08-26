@@ -104,13 +104,15 @@ def run(cfg: Settings) -> pd.DataFrame:
     )
 
     scored = _score_candidates(candidates, buildings, rpcq)
-    matches, _ambiguous = _select_matches(scored)
+    matches, ambiguous = _select_matches(scored)
 
     crosswalk = _build_crosswalk(matches)
     _write_parquet(crosswalk, cfg.stage_04_crosswalk)
 
     merged = _join_rpcq_fields(buildings, crosswalk, rpcq)
     merged = _fill_historique_sommaire(merged)
+
+    _log_match_report(merged, crosswalk, ambiguous, rpcq)
 
     merged = _validate_schema(merged)
     _write_parquet(merged, cfg.stage_04_out)
@@ -491,3 +493,55 @@ def _fill_historique_sommaire(df: pd.DataFrame) -> pd.DataFrame:
         filled=int(filled.sum()),
     )
     return df
+
+
+def _log_match_report(
+    merged: pd.DataFrame,
+    crosswalk: pd.DataFrame,
+    ambiguous: pd.DataFrame,
+    rpcq: pd.DataFrame,
+) -> None:
+    """Log what the rapprochement resolved, refused, and could not reach.
+
+    The three counts partition the corpus — matched, ambiguous, unmatched — so a
+    silent drift in any of them is visible on the next run rather than at stage 06.
+    That matters more here than in the earlier stages: this is the only stage whose
+    output depends on two sources refreshed on independent schedules, and a
+    shrinking match rate is the first symptom of either one moving.
+
+    Coverage is reported from both ends. 1186 unmatched buildings is not a failure
+    — the exports cover at most 13 % of the corpus — but biens matching nothing is
+    a signal worth watching, since every one of them is a protected Montreal
+    building the corpus should plausibly hold.
+    """
+    total = len(merged)
+    matched = len(crosswalk)
+    ambiguous_buildings = int(ambiguous["identifiant_batiment"].nunique()) if len(ambiguous) else 0
+
+    logger.info(
+        "Match report: {matched} matched, {ambiguous} ambiguous, {unmatched} unmatched "
+        "of {total} building(s)",
+        matched=matched,
+        ambiguous=ambiguous_buildings,
+        unmatched=total - matched - ambiguous_buildings,
+        total=total,
+    )
+    if matched:
+        logger.info(
+            "Match methods: {methods}",
+            methods=crosswalk["method"].value_counts().to_dict(),
+        )
+        logger.info(
+            "Match score: min {min:.3f}, median {median:.3f} — distance median {distance:.1f} m",
+            min=float(crosswalk["score"].min()),
+            median=float(crosswalk["score"].median()),
+            distance=float(crosswalk["distance_m"].median()),
+        )
+
+    used_biens = int(crosswalk["bien_id"].nunique())
+    logger.info(
+        "RPCQ coverage: {used}/{available} bien(s) matched, {unused} matched nothing",
+        used=used_biens,
+        available=len(rpcq),
+        unused=len(rpcq) - used_biens,
+    )
