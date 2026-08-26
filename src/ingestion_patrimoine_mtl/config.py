@@ -64,6 +64,15 @@ class Settings(BaseSettings):
         return self.data_dir / "03_normalized" / "buildings_normalized.parquet"
 
     @property
+    def stage_04_out(self) -> Path:
+        """The merged corpus — stage 03 enriched with the RPCQ fields it matched.
+
+        Same row set and same grain as stage 03: the merge adds columns, never
+        records. A building the RPCQ does not cover keeps every RPCQ column null.
+        """
+        return self.data_dir / "04_merged" / "buildings_merged.parquet"
+
+    @property
     def stage_05_out(self) -> Path:
         return self.data_dir / "05_enriched" / "buildings_enriched.jsonl"
 

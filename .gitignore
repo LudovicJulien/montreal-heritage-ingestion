@@ -41,6 +41,7 @@ data/01_raw/*.parquet
 data/01b_rpcq/*.parquet
 data/02_clean/*.parquet
 data/03_normalized/*.parquet
+data/04_merged/*.parquet
 data/05_enriched/*.jsonl
 
 # Raw data (reproductible via `make download`)
