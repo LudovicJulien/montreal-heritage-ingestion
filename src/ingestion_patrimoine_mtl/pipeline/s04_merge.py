@@ -53,6 +53,23 @@ MATCH_MARGIN = 0.05
 # re-judge the pair without re-running the stage.
 CROSSWALK_COLUMNS = ["identifiant_batiment", "bien_id", "score", "method", "distance_m"]
 
+# RPCQ fields carried onto a matched building. Deliberately a short list of facts
+# the corpus does not already hold: the legal protection, the two links out, and
+# the historical prose. Coordinates, address and years are *not* carried — the
+# corpus has its own, and importing a second opinion on a value it already states
+# would leave two columns disagreeing with no rule for which one wins.
+RPCQ_JOINED_COLS = [
+    "statut_juridique",
+    "regime_protection",
+    "url_rpcq",
+    "url_photo",
+    "synthese_historique",
+]
+
+# Columns the merge adds to describe the rapprochement itself, so a consumer can
+# tell an RPCQ-backed record from one the corpus stands behind alone.
+MATCH_COLS = ["bien_id", "match_score", "match_method"]
+
 # Columns holding one value per protection regime rather than one per bien: a
 # bien that is both classé and cité carries two of each. Every other column is
 # identical across the two rows.
@@ -87,7 +104,9 @@ def run(cfg: Settings) -> pd.DataFrame:
     crosswalk = _build_crosswalk(matches)
     _write_parquet(crosswalk, cfg.stage_04_crosswalk)
 
-    return matches
+    merged = _join_rpcq_fields(buildings, crosswalk, rpcq)
+
+    return merged
 
 
 def _load_sources(cfg: Settings) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -378,3 +397,39 @@ def _write_parquet(df: pd.DataFrame, path: Path) -> None:
     """Write a validated DataFrame to a snappy-compressed Parquet file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(path, compression="snappy", index=False)
+
+
+def _join_rpcq_fields(
+    buildings: pd.DataFrame,
+    crosswalk: pd.DataFrame,
+    rpcq: pd.DataFrame,
+) -> pd.DataFrame:
+    """Left-join the RPCQ fields of each matched bien onto its building.
+
+    Left, and only left: the corpus is the spine. A building the RPCQ does not
+    cover — 1186 of the 1335 — keeps every added column null rather than dropping
+    out, and an RPCQ bien that matched nothing simply does not appear. The RPCQ is
+    a secondary source (ADR-005); it enriches the corpus, it does not replace it.
+
+    Both joins are one-to-one by construction: the crosswalk holds one row per
+    matched building, and ``_deduplicate_biens`` has already collapsed the RPCQ to
+    one row per bien_id. The merge validates that rather than trusting it — a
+    silent fan-out here would inflate the corpus, which is precisely the failure
+    the row-count test guards against.
+    """
+    match_fields = crosswalk[["identifiant_batiment", "bien_id", "score", "method"]].rename(
+        columns={"score": "match_score", "method": "match_method"}
+    )
+
+    merged = buildings.merge(
+        match_fields,
+        on="identifiant_batiment",
+        how="left",
+        validate="one_to_one",
+    )
+    return merged.merge(
+        rpcq[["bien_id", *RPCQ_JOINED_COLS]],
+        on="bien_id",
+        how="left",
+        validate="many_to_one",
+    )
