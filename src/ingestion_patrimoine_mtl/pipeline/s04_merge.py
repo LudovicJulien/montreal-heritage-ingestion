@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from difflib import SequenceMatcher
+from pathlib import Path
 
 import pandas as pd
 from loguru import logger
@@ -48,6 +49,10 @@ MATCH_THRESHOLD = 0.70
 # the pair is logged and left unresolved rather than settled on a third decimal.
 MATCH_MARGIN = 0.05
 
+# The crosswalk contract: the two identifiers, and enough of the evidence to
+# re-judge the pair without re-running the stage.
+CROSSWALK_COLUMNS = ["identifiant_batiment", "bien_id", "score", "method", "distance_m"]
+
 # Columns holding one value per protection regime rather than one per bien: a
 # bien that is both classé and cité carries two of each. Every other column is
 # identical across the two rows.
@@ -78,6 +83,9 @@ def run(cfg: Settings) -> pd.DataFrame:
 
     scored = _score_candidates(candidates, buildings, rpcq)
     matches, _ambiguous = _select_matches(scored)
+
+    crosswalk = _build_crosswalk(matches)
+    _write_parquet(crosswalk, cfg.stage_04_crosswalk)
 
     return matches
 
@@ -349,3 +357,24 @@ def _log_ambiguous_pairs(ambiguous: pd.DataFrame) -> None:
                 for bien_id, score in zip(group["bien_id"], group["score"], strict=True)
             ),
         )
+
+
+def _build_crosswalk(matches: pd.DataFrame) -> pd.DataFrame:
+    """Reduce the accepted pairs to the crosswalk contract.
+
+    One row per matched building — never per bien, since a bien may cover several
+    buildings — carrying the two identifiers plus the evidence: the composite
+    score, how the names matched, and the metres between the two geocodings.
+
+    Keeping the evidence is what makes MATCH_THRESHOLD reviewable. Without it,
+    raising or lowering the threshold is a blind change; with it, the effect can
+    be read straight off the table.
+    """
+    crosswalk = matches.reindex(columns=CROSSWALK_COLUMNS)
+    return crosswalk.sort_values("score", ascending=False, kind="stable").reset_index(drop=True)
+
+
+def _write_parquet(df: pd.DataFrame, path: Path) -> None:
+    """Write a validated DataFrame to a snappy-compressed Parquet file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path, compression="snappy", index=False)

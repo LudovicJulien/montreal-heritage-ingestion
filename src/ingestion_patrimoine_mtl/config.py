@@ -73,6 +73,17 @@ class Settings(BaseSettings):
         return self.data_dir / "04_merged" / "buildings_merged.parquet"
 
     @property
+    def stage_04_crosswalk(self) -> Path:
+        """The crosswalk table — which building resolved to which RPCQ bien.
+
+        Written beside the merged corpus rather than folded into it: the crosswalk
+        is the audit trail of the rapprochement, one row per *matched* building,
+        and it is what a reviewer reads to judge a threshold without re-running
+        the stage.
+        """
+        return self.data_dir / "04_merged" / "crosswalk.parquet"
+
+    @property
     def stage_05_out(self) -> Path:
         return self.data_dir / "05_enriched" / "buildings_enriched.jsonl"
 
