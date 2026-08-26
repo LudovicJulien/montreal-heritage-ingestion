@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     rpcq_subdir: str = Field(default="rpcq")
     rpcq_classes_file: str = Field(default="immeubles_classes.csv")
     rpcq_cites_file: str = Field(default="immeubles_cites.csv")
-    pipeline_version: str = Field(default="0.4.0")
+    pipeline_version: str = Field(default="0.4.1")
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="dev")  # "dev" | "json"
 
