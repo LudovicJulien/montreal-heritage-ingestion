@@ -15,6 +15,7 @@ from ingestion_patrimoine_mtl.pipeline.s04_merge import (
     METHOD_EXACT_NAME,
     run,
 )
+from ingestion_patrimoine_mtl.schemas import TEXT_SOURCE_CORPUS, TEXT_SOURCE_RPCQ
 
 
 def _crosswalk(cfg: Settings) -> pd.DataFrame:
@@ -141,3 +142,48 @@ class TestAmbiguousPairs:
 
         crosswalk = _crosswalk(merge_sources)
         assert (crosswalk["score"] >= MATCH_THRESHOLD).all()
+
+
+class TestHistoriqueSommaire:
+    def test_an_existing_text_is_never_overwritten(self, merge_sources: Settings) -> None:
+        """Row 0 has a corpus text and a matched bien with a synthèse; the corpus wins.
+
+        Not because the corpus text is better — the RPCQ synthèses are usually
+        longer — but because overwriting is unreviewable. A wrong match at 0.71
+        would rewrite the history of a building nobody would think to re-check.
+        """
+        merged = run(merge_sources)
+
+        kept = merged.set_index("identifiant_batiment").loc["0039-27-4599-00"]
+        assert kept["historique_sommaire"] == "Texte historique déjà présent dans le corpus."
+        assert kept["historique_source"] == TEXT_SOURCE_CORPUS
+
+    def test_a_null_text_is_filled_from_the_rpcq_synthese(self, merge_sources: Settings) -> None:
+        """Row 1 has a matched bien and no text of its own — this is why the merge exists."""
+        merged = run(merge_sources)
+
+        filled = merged.set_index("identifiant_batiment").loc["0039-27-4600-00"]
+        assert filled["historique_sommaire"] == "Synthèse du RPCQ pour Aldred."
+        assert filled["historique_source"] == TEXT_SOURCE_RPCQ
+
+    def test_the_rpcq_synthese_is_kept_alongside_the_corpus_text(
+        self, merge_sources: Settings
+    ) -> None:
+        """Not overwriting is only reversible if the synthèse survives in its own column."""
+        merged = run(merge_sources)
+
+        kept = merged.set_index("identifiant_batiment").loc["0039-27-4599-00"]
+        assert kept["synthese_historique"] == "Synthèse du RPCQ pour Hurtubise."
+
+    def test_an_unmatched_building_has_no_text_source(self, merge_sources: Settings) -> None:
+        """No text means no provenance — an empty string here would be a claim of one."""
+        merged = run(merge_sources)
+
+        unmatched = merged.set_index("identifiant_batiment").loc["0039-27-4604-00"]
+        assert pd.isna(unmatched["historique_source"])
+
+    def test_an_unmatched_bien_leaks_no_text_into_the_corpus(self, merge_sources: Settings) -> None:
+        """92518 has a synthèse and no coordinates; nothing may pick it up."""
+        merged = run(merge_sources)
+
+        assert "Synthèse orpheline." not in set(merged["historique_sommaire"].dropna())
