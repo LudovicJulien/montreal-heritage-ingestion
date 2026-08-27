@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     rpcq_subdir: str = Field(default="rpcq")
     rpcq_classes_file: str = Field(default="immeubles_classes.csv")
     rpcq_cites_file: str = Field(default="immeubles_cites.csv")
-    pipeline_version: str = Field(default="0.4.0")
+    pipeline_version: str = Field(default="0.4.1")
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="dev")  # "dev" | "json"
 
@@ -65,7 +65,27 @@ class Settings(BaseSettings):
 
     @property
     def stage_04_out(self) -> Path:
-        return self.data_dir / "04_enriched" / "buildings_enriched.jsonl"
+        """The merged corpus — stage 03 enriched with the RPCQ fields it matched.
+
+        Same row set and same grain as stage 03: the merge adds columns, never
+        records. A building the RPCQ does not cover keeps every RPCQ column null.
+        """
+        return self.data_dir / "04_merged" / "buildings_merged.parquet"
+
+    @property
+    def stage_04_crosswalk(self) -> Path:
+        """The crosswalk table — which building resolved to which RPCQ bien.
+
+        Written beside the merged corpus rather than folded into it: the crosswalk
+        is the audit trail of the rapprochement, one row per *matched* building,
+        and it is what a reviewer reads to judge a threshold without re-running
+        the stage.
+        """
+        return self.data_dir / "04_merged" / "crosswalk.parquet"
+
+    @property
+    def stage_05_out(self) -> Path:
+        return self.data_dir / "05_enriched" / "buildings_enriched.jsonl"
 
 
 settings = Settings()

@@ -118,3 +118,45 @@ class NormalizedSchema(pa.DataFrameModel):
     class Config:
         strict = False
         coerce = True
+
+
+# Provenance of the surviving historique_sommaire, written by stage 04.
+TEXT_SOURCE_CORPUS = "donnees_montreal"
+TEXT_SOURCE_RPCQ = "rpcq"
+
+
+class MergedSchema(NormalizedSchema):
+    """DataFrame contract — stage 04 · Merge output (buildings_merged.parquet).
+
+    Inherits every constraint of NormalizedSchema — the merge adds columns, it
+    does not relax the corpus — and adds the RPCQ columns on top.
+
+    **All of the additions are nullable, and that is the contract**, not an
+    oversight. Only 149 of the 1335 buildings resolved to a bien; a non-null
+    constraint on any RPCQ column would state that the rapprochement is exhaustive,
+    which it is not and cannot be — the open data exports cover at most 13 % of the
+    corpus (ADR-005), and ADR-004 forbids inventing a link to fill the rest.
+
+    ``match_score`` is bounded to [0, 1] because the composite score is a weighted
+    mean of two components already in that range. The bound is not there to catch
+    bad data — the stage produces the value — but to catch a scoring function that
+    has stopped being normalised, which would make every threshold in the stage
+    mean something different without any of them changing.
+    """
+
+    bien_id: Series[str] = pa.Field(nullable=True)
+    match_score: Series[float] = pa.Field(nullable=True, ge=0.0, le=1.0)
+    match_method: Series[str] = pa.Field(nullable=True)
+    statut_juridique: Series[str] = pa.Field(nullable=True)
+    regime_protection: Series[str] = pa.Field(nullable=True)
+    url_rpcq: Series[str] = pa.Field(nullable=True)
+    url_photo: Series[str] = pa.Field(nullable=True)
+    synthese_historique: Series[str] = pa.Field(nullable=True)
+    historique_sommaire: Series[str] = pa.Field(nullable=True)
+    historique_source: Series[str] = pa.Field(
+        nullable=True, isin=[TEXT_SOURCE_CORPUS, TEXT_SOURCE_RPCQ]
+    )
+
+    class Config:
+        strict = False
+        coerce = True

@@ -14,7 +14,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--stage",
-        choices=["01", "01b", "02", "03", "04", "all"],
+        choices=["01", "01b", "02", "03", "04", "05", "all"],
         default="all",
         help="Pipeline stage to run (default: all)",
     )
@@ -42,7 +42,8 @@ def main() -> int:
         s01b_rpcq,
         s02_clean,
         s03_normalize,
-        s04_enrich,
+        s04_merge,
+        s05_enrich,
     )
 
     stages = {
@@ -50,7 +51,8 @@ def main() -> int:
         "01b": s01b_rpcq.run,
         "02": s02_clean.run,
         "03": s03_normalize.run,
-        "04": s04_enrich.run,
+        "04": s04_merge.run,
+        "05": s05_enrich.run,
     }
 
     to_run = list(stages.keys()) if args.stage == "all" else [args.stage]

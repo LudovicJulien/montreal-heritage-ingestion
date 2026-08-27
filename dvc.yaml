@@ -44,12 +44,15 @@ stages:
     outs:
       - data/03_normalized/buildings_normalized.parquet
 
-  s04_enrich:
+  s04_merge:
     cmd: python -m ingestion_patrimoine_mtl --stage 04
     deps:
       - data/03_normalized/buildings_normalized.parquet
+      - data/01b_rpcq/rpcq_raw.parquet
       - src/ingestion_patrimoine_mtl/config.py
-      - src/ingestion_patrimoine_mtl/models.py
-      - src/ingestion_patrimoine_mtl/pipeline/s04_enrich.py
+      - src/ingestion_patrimoine_mtl/schemas.py
+      - src/ingestion_patrimoine_mtl/utils/matching.py
+      - src/ingestion_patrimoine_mtl/pipeline/s04_merge.py
     outs:
-      - data/04_enriched/buildings_enriched.jsonl
+      - data/04_merged/buildings_merged.parquet
+      - data/04_merged/crosswalk.parquet
