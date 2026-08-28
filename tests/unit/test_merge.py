@@ -285,3 +285,51 @@ class TestRun:
         """No silent empty corpus when stage 03 has not run."""
         with pytest.raises(FileNotFoundError):
             run(cfg)
+
+
+class TestOutrankedClaims:
+    """One bien, two buildings, and only one of them is that bien."""
+
+    def test_the_exact_name_claim_keeps_the_bien(self, outranked_claim_sources: Settings) -> None:
+        """The chapel matches the bien name exactly, 1 m away."""
+        merged = run(outranked_claim_sources).set_index("identifiant_batiment")
+
+        assert merged.loc["0040-78-7984-01", "bien_id"] == "96643"
+        assert merged.loc["0040-78-7984-01", "match_method"] == METHOD_EXACT_NAME
+
+    def test_the_approximate_claim_is_refused(self, outranked_claim_sources: Settings) -> None:
+        """The school scores 0.86 and would otherwise inherit the chapel's protection."""
+        merged = run(outranked_claim_sources).set_index("identifiant_batiment")
+
+        school = merged.loc["0040-78-7984-02"]
+        assert pd.isna(school["bien_id"])
+        assert pd.isna(school["statut_juridique"])
+        assert pd.isna(school["url_rpcq"])
+
+    def test_the_refused_building_inherits_no_text(self, outranked_claim_sources: Settings) -> None:
+        """The failure that motivated the rule: the chapel's history in the school's record."""
+        merged = run(outranked_claim_sources).set_index("identifiant_batiment")
+
+        assert pd.isna(merged.loc["0040-78-7984-02", "historique_sommaire"])
+
+    def test_the_refusal_is_logged_with_both_identifiers(
+        self, outranked_claim_sources: Settings, captured_warnings: list[str]
+    ) -> None:
+        """A heuristic about names needs a review queue, not a count."""
+        run(outranked_claim_sources)
+
+        assert any(
+            "Refused claim on bien 96643 by 0040-78-7984-02" in line for line in captured_warnings
+        )
+
+    def test_an_ensemble_matched_the_same_way_throughout_is_left_alone(
+        self, merge_sources: Settings
+    ) -> None:
+        """The rule fires only when the methods differ, so a real ensemble survives.
+
+        The reference extract has six of those against two false links, and a rule
+        on the leading noun instead would have refused 25 of the 149 pairs.
+        """
+        merged = run(merge_sources)
+
+        assert merged["bien_id"].notna().sum() == 2

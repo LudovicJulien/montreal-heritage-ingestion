@@ -359,6 +359,50 @@ def sample_rpcq_df() -> pd.DataFrame:
 
 
 @pytest.fixture
+def outranked_claim_sources(cfg: Settings) -> Settings:
+    """The chapel-and-school case that motivates the outranked-claim rule.
+
+    Reproduces 0040-78-7984-01 and -02 of the real corpus: the RPCQ bien is the
+    chapel, the school stands 31 m away, and their normalized names differ only by
+    the word that says what each building is. That word is 5 characters of 31, so
+    the similarity is 0.892 and the school clears the 0.70 threshold comfortably.
+    """
+    buildings = pd.DataFrame(
+        {
+            "identifiant_batiment": ["0040-78-7984-01", "0040-78-7984-02"],
+            "nom_historique": [
+                "Chapelle Notre-Dame-de-Bon-Secours",
+                "École Notre-Dame-de-Bon-Secours",
+            ],
+            "voie": ["de la Commune", "de la Commune"],
+            "arrondissement": ["Ville-Marie", "Ville-Marie"],
+            "municipalite_type": ["arrondissement", "arrondissement"],
+            "historique_sommaire": [None, None],
+            "centro_x": [-73.55110, -73.55100],
+            "centro_y": [45.50780, 45.50752],
+            "record_hash": ["a" * 64, "b" * 64],
+        }
+    )
+    biens = pd.DataFrame(
+        {
+            "bien_id": ["96643"],
+            "nom_bien": ["Chapelle Notre-Dame-de-Bon-Secours"],
+            "statut_juridique": ["Classement"],
+            "regime_protection": ["classe"],
+            "synthese_historique": ["Synthèse du RPCQ pour la chapelle."],
+            "url_rpcq": ["http://rpcq.test/96643"],
+            "url_photo": [None],
+            "latitude": [45.50781],
+            "longitude": [-73.55111],
+        }
+    )
+    for path, frame in ((cfg.stage_03_out, buildings), (cfg.stage_01b_out, biens)):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_parquet(path, compression="snappy", index=False)
+    return cfg
+
+
+@pytest.fixture
 def merge_sources(
     cfg: Settings,
     sample_normalized_df: pd.DataFrame,
