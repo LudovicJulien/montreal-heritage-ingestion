@@ -21,7 +21,7 @@ completely as it governs stage 03.
 **Inputs**: `data/03_normalized/buildings_normalized.parquet` (1335 rows) and
 `data/01b_rpcq/rpcq_raw.parquet` (179 rows, 175 distinct biens)
 **Outputs**: `data/04_merged/buildings_merged.parquet` — **1335 rows, 30 columns**
-and `data/04_merged/crosswalk.parquet` — **149 rows, 5 columns**
+and `data/04_merged/crosswalk.parquet` — **147 rows, 5 columns**
 
 ## The problem: there is no join key
 
@@ -99,32 +99,72 @@ A bien matching *several buildings* is deliberately **not** ambiguous: an RPCQ b
 ensemble covering a whole terrace. 8 biens do exactly that. The resolution only has to be a
 function on the building side, where each record describes one building.
 
+## The outranked-claim rule — the other way a link gets fabricated
+
+The ambiguity rule reads one building's competing biens. This one reads the mirror image: one
+bien's competing buildings.
+
+A bien claimed by several buildings is usually an ensemble, so the claims are left alone by
+default. The reference extract separates the genuine case from the false one cleanly — **8 biens
+are claimed by 17 buildings**, and in the six real ensembles every claimant matched by the same
+method, while in both false ones a single building matched the bien's name *exactly* and its
+neighbour only approximately.
+
+`Chapelle Notre-Dame-de-Bon-Secours` is the case that motivates the rule:
+
+```
+0040-78-7984-01  chapelle notre dame de bon secours   0.998  exact_name      1.0 m
+0040-78-7984-02  ecole notre dame de bon secours      0.862  name_distance  31.5 m
+```
+
+The chapel *is* the bien. The school next door is a different building, and the word that says so
+is 5 characters of 31 — a 0.892 name similarity, comfortably over the 0.70 threshold. Left
+unchecked, the RPCQ synthèse of the chapel was written into the school's `historique_sommaire`,
+which is exactly the fabricated fact ADR-004 exists to prevent.
+
+**So a building whose name *is* the bien's name identifies it, and a neighbour whose name merely
+resembles it loses the claim.** The refused building becomes unmatched — every RPCQ column null,
+like the buildings the exports never covered — never reassigned to something else.
+
+The rule is deliberately narrow: it fires only when the two methods differ. An ensemble whose
+members all match approximately keeps every member (`Maison Jane-Tate` I and II), and so does one
+whose members all match exactly (`Maisons Emmanuel-Saint-Louis`, three buildings). Comparing the
+leading noun instead — *chapelle* against *école* — would have refused 25 of the 149 pairs, most
+of them correct.
+
+Two claims are refused on the reference extract, and both are logged with the pair, not counted:
+
+```
+Refused claim on bien 96643 by 0040-78-7984-02 at score 0.862: another building
+  matches the bien name exactly — left unmatched (ADR-004)
+```
+
 ## Measured results
 
 | | Count | Share of 1335 |
 |---|---:|---:|
-| Matched | **149** | 11.2 % |
+| Matched | **147** | 11.0 % |
 | Ambiguous (logged, unresolved) | **9** | 0.7 % |
-| Unmatched | 1177 | 88.2 % |
+| Unmatched | 1179 | 88.3 % |
 
 The ceiling is 175, not 1335: the RPCQ open data simply does not describe the rest of the corpus
-(ADR-005). Against that ceiling, 149 matched and **35 biens matched nothing** — among them
+(ADR-005). Against that ceiling, 147 matched and **35 biens matched nothing** — among them
 `Château De Ramezay` and `Cinéma Corona`, each one a protected Montreal building the corpus should
 plausibly hold. That count is the signal worth watching on a refresh.
 
-Protection breakdown of the 149: 106 `Classement`, 39 `Citation`, 4 `Citation / Classement`. 85 of
+Protection breakdown of the 147: 104 `Classement`, 39 `Citation`, 4 `Citation / Classement`. 83 of
 them are in Ville-Marie, which holds 846 of the 1335 buildings.
 
 | Score quartile | min | Q1 | median | Q3 | max |
 |---|---:|---:|---:|---:|---:|
-| | 0.703 | 0.887 | 0.961 | 0.991 | 0.999 |
+| | 0.703 | 0.889 | 0.962 | 0.991 | 0.999 |
 
 | Distance | min | median | Q3 | max |
 |---|---:|---:|---:|---:|
-| | 0.4 m | 6.6 m | 19.3 m | 136.0 m |
+| | 0.4 m | 6.6 m | 19.1 m | 136.0 m |
 
-**102 of the 149 matched on an exact normalized name**, 47 on the fuzzy ratio. The distribution is
-strongly bimodal — the median accepted pair scores 0.961 — which is why a threshold works at all:
+**102 of the 147 matched on an exact normalized name**, 45 on the fuzzy ratio. The distribution is
+strongly bimodal — the median accepted pair scores 0.962 — which is why a threshold works at all:
 there is very little between a confident pair and a doubtful one.
 
 ### The band around the threshold
@@ -171,9 +211,10 @@ reads:
 | | Records with text | Share |
 |---|---:|---:|
 | After stage 03 | 296 | 22.2 % |
-| After stage 04 | **426** | **31.9 %** |
+| After stage 04 | **424** | **31.8 %** |
 
-130 buildings gained a historical text they did not have.
+128 buildings gained a historical text they did not have. That is the ceiling, not a milestone:
+open data is now the only acquisition channel (ADR-006).
 
 ## Function walkthrough
 
@@ -211,12 +252,16 @@ Computes `name_similarity`, `distance_score` and the weighted `score`, plus `met
 (`exact_name` | `name_distance`). A pair with no name on either side scores 0 on the name component
 and cannot clear the threshold on distance alone.
 
-### `_select_matches` → `_log_ambiguous_pairs`
+### `_select_matches` → `_log_ambiguous_pairs` → `_refuse_outranked_claims`
 
 Drops everything below 0.70, then accepts the best candidate per building unless the runner-up is
 within 0.05. Returns `(matches, ambiguous)`. Each ambiguous building is logged on **its own line**
 with every competing bien and its score — this is a review queue, and a count gives a reviewer
 nothing to review.
+
+`_refuse_outranked_claims` then runs over the accepted matches and drops a bien's approximate
+claims when another building matches that bien's name exactly (see the rule above).
+`_log_outranked_claims` logs each refusal with its pair and score, for the same reason.
 
 ### `_build_crosswalk` → `_write_parquet`
 
@@ -262,12 +307,15 @@ column would assert that the rapprochement is exhaustive, which it cannot be.
 
 ## Known limitations
 
-- **The 1177 unmatched buildings are a coverage problem, not an algorithm problem.** The open data
-  exports hold 175 biens. Reaching the rest means scraping `patrimoine-culturel.gouv.qc.ca`
-  (`feat/04c-rpcq-scrape`) — and the 149 pairs measured here are the validation set that says the
-  matching is worth pointing at scraped pages.
-- **No manual review file.** The 9 ambiguous buildings are logged, not queued into an artifact a
-  human can resolve and feed back. If the scrape multiplies them, that becomes worth building.
+- **The 1179 unmatched buildings are a coverage problem the pipeline cannot solve.** The open data
+  exports hold 175 biens and that is the whole reachable set: scraping is ruled out as an
+  acquisition channel (ADR-006), so the matcher is already pointed at everything it will ever see.
+  Raising the ceiling means a richer export from the publisher, not a better algorithm.
+- **The crosswalk has no ground truth.** Nothing states which bien a building is; the 147 links are
+  inferred, and `score`, `method` and `distance_m` travelling with each one are the only evidence
+  a reviewer gets.
+- **No manual review file.** The 9 ambiguous buildings and the 2 refused claims are logged, not
+  queued into an artifact a human can resolve and feed back. At 11 rows a log is enough.
 - **The thresholds are calibrated on one extract.** They were read off the ranked pairs of the
   2026-08 data. A refresh that changes the naming conventions of either source should re-read the
   band between 0.60 and 0.75 before trusting the rate.
@@ -276,5 +324,5 @@ column would assert that the rapprochement is exhaustive, which it cannot be.
   probably real (see the band above). A name-aware synonym list — `théâtre` ≈ `cinéma`,
   `couvent` ≈ `maison mère` — would separate them better than moving the threshold, which trades
   one error for the other.
-- **`SequenceMatcher` is O(n²) on name length.** Irrelevant at 1973 pairs; worth revisiting if the
-  scrape pushes the candidate count by an order of magnitude.
+- **`SequenceMatcher` is O(n²) on name length.** Irrelevant at 1973 pairs, and the candidate count
+  is now bounded by the exports — it will not grow by an order of magnitude.
