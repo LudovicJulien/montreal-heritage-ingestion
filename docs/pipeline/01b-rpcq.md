@@ -13,7 +13,9 @@ rawData/rpcq/*.csv               → 01b ──────────┘
 ```
 
 For why the open data exports come before scraping, see
-[ADR-005](../adr/ADR-005-rpcq-as-secondary-source.md).
+[ADR-005](../adr/ADR-005-rpcq-as-secondary-source.md). Scraping never followed:
+[ADR-006](../adr/ADR-006-no-web-scraping.md) makes these exports the only acquisition channel, so
+this stage is not a first step towards a larger source — it is the whole secondary source.
 
 ---
 
@@ -232,8 +234,9 @@ straddles a municipal boundary.
 - **No join key to the Données Montréal corpus.** `LIEN` in the source CSV is a street particle
   (`"des"`, `"du"`), not a URL, and the file contains zero occurrences of `patrimoine-culturel`.
   The rapprochement at stage 04 is necessarily fuzzy.
-- **No coverage of the unprotected majority.** 175 biens against 1336 buildings. The 179 rows are
-  a validation set for the matcher before scraping, not the enrichment itself.
+- **No coverage of the unprotected majority.** 175 biens against 1336 buildings, and under
+  ADR-006 that is the permanent ceiling: stage 04 realises 147 of them. The 179 rows validate the
+  matcher; they are not the enrichment.
 - **No typing.** Years stay text (`"vers 1732"`), dates stay text. Only the coordinates are cast.
 
 Next stage: [04 — Merge](04-merge.md).
