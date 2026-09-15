@@ -6,6 +6,7 @@ import pandas as pd
 
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.models import BuildingEntities
+from ingestion_patrimoine_mtl.utils.taxonomy import normalize_typologie
 
 
 def run(cfg: Settings) -> None:
@@ -17,6 +18,18 @@ def run(cfg: Settings) -> None:
     prose the NER reads.
     """
     raise NotImplementedError
+
+
+def _normalize_typologie(df: pd.DataFrame) -> pd.DataFrame:
+    """Add ``typologie_normalisee`` from ``typologie_specifique`` (controlled vocabulary).
+
+    ``typologie_specifique`` is left untouched as the source value; the mapped
+    value lives in its own column so a reviewer can always trace a facet back to
+    what the corpus actually said.
+    """
+    df = df.copy()
+    df["typologie_normalisee"] = df["typologie_specifique"].apply(normalize_typologie)
+    return df
 
 
 def _extract_entities(texts: list[str | None]) -> list[BuildingEntities]:
