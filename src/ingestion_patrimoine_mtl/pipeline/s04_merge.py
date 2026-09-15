@@ -339,10 +339,10 @@ def _select_matches(scored: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     would fabricate a link indistinguishable from a real one downstream, exactly
     like clamping 9999 to 2030 fabricates a construction date.
 
-    A bien matching several buildings is *not* ambiguous and is left alone: an
-    RPCQ bien can legitimately be an ensemble covering a whole terrace. The
-    resolution only has to be a function on the building side, where each record
-    describes exactly one building.
+    A bien matching several buildings is *not* ambiguous in itself: an RPCQ bien
+    can legitimately be an ensemble covering a whole terrace, and the resolution
+    only has to be a function on the building side. ``_refuse_outranked_claims``
+    then removes the subset of those that are not ensembles.
 
     Returns (matches, ambiguous) — the first with one row per matched building.
     """
@@ -367,7 +367,79 @@ def _select_matches(scored: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         ranked["identifiant_batiment"].isin(best.loc[~resolved.to_numpy(), "identifiant_batiment"])
     ]
     _log_ambiguous_pairs(ambiguous)
+    matches = _refuse_outranked_claims(matches)
     return matches.reset_index(drop=True), ambiguous.reset_index(drop=True)
+
+
+def _refuse_outranked_claims(matches: pd.DataFrame) -> pd.DataFrame:
+    """Drop a bien's approximate claims when another building matches its name exactly.
+
+    A bien claimed by several buildings is usually an ensemble. Sometimes it is a
+    false link, and the reference extract separates the two cases cleanly: 8 biens
+    are claimed by 17 buildings, and in the six genuine ensembles **every claimant
+    matched by the same method**, while in both false ones a single building
+    matched the bien's name exactly and its neighbour only approximately.
+
+    "Chapelle Notre-Dame-de-Bon-Secours" is the case that motivates the rule. The
+    corpus holds the chapel at 0040-78-7984-01 and the *school* next door at
+    0040-78-7984-02, and the RPCQ bien is the chapel. The chapel matched it at
+    0.998 by exact name, 1 m away. The school matched the same bien at 0.862 and
+    31.5 m, because ``normalize_name`` leaves "ecole notre dame de bon secours"
+    against "chapelle notre dame de bon secours" and the five characters that tell
+    a school from a chapel are 5 of 31 — a 0.892 similarity. The RPCQ synthèse of
+    the chapel was then written into the school's historique_sommaire, which is
+    precisely the fabricated fact ADR-004 exists to prevent.
+
+    So: a building whose name **is** the bien's name identifies it. A neighbour
+    whose name merely resembles it does not, and loses the claim.
+
+    The rule is deliberately narrow. It fires only when the two methods differ, so
+    a real ensemble whose members all match approximately keeps every member
+    ("Maison Jane-Tate" I and II, "Maison et entrepôt Edward-William-Gray"), and so
+    does one whose members all match exactly ("Maisons Emmanuel-Saint-Louis", three
+    buildings). Comparing the leading noun instead would have refused 25 of the 149
+    pairs, most of them correct.
+
+    A refused building becomes unmatched, not reassigned: it keeps every RPCQ
+    column null, exactly like the 1186 the exports never covered.
+    """
+    if matches.empty:
+        return matches
+
+    claims_per_bien = matches.groupby("bien_id")["identifiant_batiment"].transform("size")
+    has_exact = matches.groupby("bien_id")["method"].transform(
+        lambda methods: (methods == METHOD_EXACT_NAME).any()
+    )
+    outranked = (claims_per_bien > 1) & has_exact & (matches["method"] != METHOD_EXACT_NAME)
+
+    _log_outranked_claims(matches[outranked])
+    return matches[~outranked]
+
+
+def _log_outranked_claims(outranked: pd.DataFrame) -> None:
+    """Log every claim refused for being outranked, one line per building.
+
+    A review queue, like ``_log_ambiguous_pairs``: the rule is a heuristic about
+    names, and a reviewer who disagrees with one of its verdicts needs the pair,
+    not a count.
+    """
+    if outranked.empty:
+        return
+
+    for identifier, bien_id, score in zip(
+        outranked["identifiant_batiment"],
+        outranked["bien_id"],
+        outranked["score"],
+        strict=True,
+    ):
+        logger.warning(
+            "Refused claim on bien {bien_id} by {identifier} at score {score:.3f}: "
+            "another building matches the bien name exactly — left unmatched (ADR-004)",
+            bien_id=bien_id,
+            identifier=identifier,
+            score=score,
+        )
+    logger.info("Outranked claims refused: {n}", n=len(outranked))
 
 
 def _log_ambiguous_pairs(ambiguous: pd.DataFrame) -> None:
