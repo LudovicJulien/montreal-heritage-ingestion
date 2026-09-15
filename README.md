@@ -1,10 +1,10 @@
 # Montreal Heritage Ingestion Pipeline
 
-> **A production-grade data ingestion pipeline that transforms raw open data into enriched, RAG-ready records — with contractual data quality, full reproducibility, and French NLP.**
+> **A production-grade data ingestion pipeline that transforms raw open data into enriched, RAG-ready records, with contractual data quality, full reproducibility, and French NLP.**
 
 This pipeline ingests the **1,336 heritage buildings** published by [Données Montréal](https://donnees.montreal.ca), the Ville de Montréal open data portal, applies multi-stage cleaning and validation, reconciles them against Quebec's official heritage registry (RPCQ), and maps their typology onto a controlled vocabulary. Named-entity extraction with spaCy is planned but not yet implemented; see [Project Status](#project-status).
 
-> The source file counts 1,336 records over 2,743 physical lines: 272 buildings carry a multi-paragraph `HISTORIQUE_SOMMAIRE` with embedded newlines. Line counts are not record counts here — see [03-normalize.md](docs/pipeline/03-normalize.md).
+> The source file counts 1,336 records over 2,743 physical lines: 272 buildings carry a multi-paragraph `HISTORIQUE_SOMMAIRE` with embedded newlines. Line counts are not record counts here; see [03-normalize.md](docs/pipeline/03-normalize.md).
 
 ![CI](https://github.com/LudovicJulien/montreal-heritage-ingestion/actions/workflows/ci.yml/badge.svg)
 ![Version](https://img.shields.io/badge/version-0.5.0-brightgreen)
@@ -66,7 +66,7 @@ rawData/edifices_patrimoine.csv  (1,336 buildings · 16 columns)
          v
 data/01_raw/buildings_raw.parquet          <- RawSchema (Pandera)
          |
-         |    Données Québec open data (donneesquebec.ca) — CC-BY 4.0
+         |    Données Québec open data (donneesquebec.ca), CC-BY 4.0
          |             |
          |             v  make rpcq-download
          |    rawData/rpcq/*.csv  (621 classés + 730 cités)
@@ -123,7 +123,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | [ADR-003](docs/adr/ADR-003-sha256-row-hashing-for-idempotence.md) | Why SHA-256 per-row hashing for idempotent re-runs |
 | [ADR-004](docs/adr/ADR-004-data-quality-policy.md) | When to reject a row, nullify a field, or normalize a value |
 | [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md) | Why the RPCQ open data exports come before scraping |
-| [ADR-006](docs/adr/ADR-006-no-web-scraping.md) | Why open data exports are the only acquisition channel — no scraping |
+| [ADR-006](docs/adr/ADR-006-no-web-scraping.md) | Why open data exports are the only acquisition channel, no scraping |
 
 ### Stage-by-Stage Documentation
 
@@ -214,7 +214,7 @@ DVC tracks pipeline artifacts (Parquet, JSONL). Each contributor sets their own 
 dvc remote add -d local /your/path/to/dvc-store --local
 ```
 
-The URL is written to `.dvc/config.local` which is gitignored — your path never reaches the repository.
+The URL is written to `.dvc/config.local` which is gitignored; your path never reaches the repository.
 
 ### Run the full pipeline
 
@@ -316,7 +316,7 @@ cp .env.example .env
 ```
 montreal-heritage-ingestion/
 ├── src/ingestion_patrimoine_mtl/
-│   ├── config.py            # Pydantic BaseSettings — paths + pipeline flags
+│   ├── config.py            # Pydantic BaseSettings: paths + pipeline flags
 │   ├── models.py            # BuildingRaw · RpcqBuilding · BuildingEntities · BuildingEnriched
 │   ├── schemas.py           # Pandera DataFrame contracts per stage
 │   ├── pipeline/
@@ -356,4 +356,4 @@ montreal-heritage-ingestion/
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU General Public License v3.0**; see the [LICENSE](LICENSE) file for details.
