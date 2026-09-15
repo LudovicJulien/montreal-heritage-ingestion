@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
+from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.models import BuildingEntities
-from ingestion_patrimoine_mtl.utils.taxonomy import normalize_typologie
+from ingestion_patrimoine_mtl.utils.taxonomy import TYPOLOGIE_MAPPING, normalize_typologie
 
 
 def run(cfg: Settings) -> None:
@@ -26,8 +27,25 @@ def _normalize_typologie(df: pd.DataFrame) -> pd.DataFrame:
     ``typologie_specifique`` is left untouched as the source value; the mapped
     value lives in its own column so a reviewer can always trace a facet back to
     what the corpus actually said.
+
+    A raw value ``TYPOLOGIE_MAPPING`` has never seen is logged once at WARNING,
+    not once per row — the mapping was built from one extract, and a refresh
+    introducing a new category should be loud, never a silently empty facet.
     """
     df = df.copy()
+    unmapped = sorted(
+        {
+            value
+            for value in df["typologie_specifique"].dropna().unique()
+            if value.casefold() not in TYPOLOGIE_MAPPING
+        }
+    )
+    for value in unmapped:
+        logger.warning(
+            "typologie_specifique value absent from TYPOLOGIE_MAPPING, passed through "
+            "unmapped: {value!r}",
+            value=value,
+        )
     df["typologie_normalisee"] = df["typologie_specifique"].apply(normalize_typologie)
     return df
 
