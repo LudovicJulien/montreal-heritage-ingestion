@@ -3,15 +3,16 @@ from __future__ import annotations
 # The 42 raw values of typologie_specifique measured on the stage 04 output
 # (2026-08-29 extract). "non applicable", "indéterminée" and "indéterminé" carry
 # no typology at all — 532 of 1335 records, 39.9 % — so they map to null rather
-# than being displayed as if they were a category. Everything else maps to
-# itself for now; the near-duplicate categories are resolved in the next commit.
+# than being displayed as if they were a category. "Édifice de culte" (52) and
+# "Édifice religieux" (39) are the source's two labels for the same thing — a
+# church, a synagogue, a temple — so both collapse onto "Édifice religieux".
 TYPOLOGIE_MAPPING: dict[str, str | None] = {
     "non applicable": None,
     "magasin-entrepôt": "magasin-entrepôt",
     "indéterminée": None,
     "Maison isolée": "Maison isolée",
     "indéterminé": None,
-    "Édifice de culte": "Édifice de culte",
+    "Édifice de culte": "Édifice religieux",
     "maison-magasin": "maison-magasin",
     "Édifice religieux": "Édifice religieux",
     "gratte-ciel": "gratte-ciel",
