@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 # The 42 raw values of typologie_specifique measured on the stage 04 output
-# (2026-08-29 extract). Every value maps to itself for now — the sentinels and
-# the near-duplicate categories are resolved in the commits that follow.
+# (2026-08-29 extract). "non applicable", "indéterminée" and "indéterminé" carry
+# no typology at all — 532 of 1335 records, 39.9 % — so they map to null rather
+# than being displayed as if they were a category. Everything else maps to
+# itself for now; the near-duplicate categories are resolved in the next commit.
 TYPOLOGIE_MAPPING: dict[str, str | None] = {
-    "non applicable": "non applicable",
+    "non applicable": None,
     "magasin-entrepôt": "magasin-entrepôt",
-    "indéterminée": "indéterminée",
+    "indéterminée": None,
     "Maison isolée": "Maison isolée",
-    "indéterminé": "indéterminé",
+    "indéterminé": None,
     "Édifice de culte": "Édifice de culte",
     "maison-magasin": "maison-magasin",
     "Édifice religieux": "Édifice religieux",
