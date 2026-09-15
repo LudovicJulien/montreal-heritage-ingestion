@@ -83,3 +83,8 @@ class TestNormalizeTypologie:
     def test_unmapped_value_passes_through_unchanged(self) -> None:
         """A raw value the mapping has never seen surfaces as-is rather than vanishing."""
         assert normalize_typologie("Phare maritime") == "Phare maritime"
+
+    def test_sentinel_values_map_to_null(self) -> None:
+        """ "non applicable", "indéterminée" and "indéterminé" are not displayed categories."""
+        for sentinel in ("non applicable", "indéterminée", "indéterminé", "INDÉTERMINÉ"):
+            assert normalize_typologie(sentinel) is None
