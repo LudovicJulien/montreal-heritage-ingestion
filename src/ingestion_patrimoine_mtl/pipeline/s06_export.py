@@ -61,9 +61,12 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _add_montreal_url(df)
     df = _build_public_frame(df)
 
-    _write_json(_build_geojson(df), cfg.stage_06_out / BUILDINGS_GEOJSON_FILENAME)
+    geojson = _build_geojson(df)
+    _write_json(geojson, cfg.stage_06_out / BUILDINGS_GEOJSON_FILENAME)
     _write_json(_records(df), cfg.stage_06_out / BUILDINGS_JSON_FILENAME)
     _write_json(_build_stats(df), cfg.stage_06_out / STATS_JSON_FILENAME)
+
+    _log_export_report(df, geojson, cfg)
     return df
 
 
@@ -235,3 +238,17 @@ def _decade_histogram(years: pd.Series[Any]) -> dict[str, int]:
     decades = years.dropna().apply(lambda year: str((int(year) // _DECADE_SIZE) * _DECADE_SIZE))
     counts = decades.value_counts()
     return {decade: int(counts[decade]) for decade in sorted(counts.index, key=int)}
+
+
+def _log_export_report(df: pd.DataFrame, geojson: dict[str, Any], cfg: Settings) -> None:
+    """Log what stage 06 produced: feature count, records without coordinates, artifact sizes."""
+    without_coordinates = int(df["latitude"].isna().sum())
+    logger.info(
+        "Stage 06 complete: {total} building(s), {features} mapped, {without} without coordinates",
+        total=len(df),
+        features=len(geojson["features"]),
+        without=without_coordinates,
+    )
+    for filename in (BUILDINGS_GEOJSON_FILENAME, BUILDINGS_JSON_FILENAME, STATS_JSON_FILENAME):
+        path = cfg.stage_06_out / filename
+        logger.info("Wrote {path} ({size} bytes)", path=path, size=path.stat().st_size)
