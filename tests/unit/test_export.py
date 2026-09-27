@@ -1,0 +1,22 @@
+"""Unit tests — stage 06 · Export (front-end artifacts)."""
+
+from __future__ import annotations
+
+import pytest
+
+from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.pipeline.s06_export import run
+from ingestion_patrimoine_mtl.utils.geo import is_in_montreal_bbox
+
+
+class TestCoordinates:
+    def test_latitude_longitude_not_swapped(self, export_source: Settings) -> None:
+        """A Montreal building's mapped lat/lon land inside the Montreal bbox, not swapped."""
+        public = run(export_source)
+
+        building = public.set_index("id").loc["0039-27-4599-00"]
+        latitude = float(building["latitude"])
+        longitude = float(building["longitude"])
+        assert latitude == pytest.approx(45.5017)
+        assert longitude == pytest.approx(-73.5679)
+        assert is_in_montreal_bbox(latitude, longitude)
