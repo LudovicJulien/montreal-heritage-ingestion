@@ -89,6 +89,40 @@ class BuildingEntities(BaseModel):
     locations: list[str] = Field(default_factory=list)
 
 
+class BuildingPublic(BaseModel):
+    """Flat record consumed by the front-end (stage 06 · Export).
+
+    One record per building of the merged corpus, coordinates or not — the map
+    reads only the GeoJSON, but the list and detail views read this shape for
+    all 1335, including the 59 without a `latitude`/`longitude` pair. Every field
+    beyond ``id`` and ``arrondissement`` is nullable because it is on the source
+    data: `nom_historique` (30 null), `adresse` (37 null, no `civique_min` at
+    all), `typologie` (677 null after the taxonomy mapping folds the sentinels
+    away), `debut_travaux`/`fin_travaux` (341/908 null), `historique_sommaire`
+    (911 null) and the three RPCQ-sourced fields, which the exports cover for
+    147 of 1335 buildings at best.
+
+    ``url_montreal`` is the one non-nullable link: it is built from
+    ``identifiant_batiment``, which stage 03 already rejects the row for when
+    absent, so every surviving record has one (ADR-006 — a link, never a fetch).
+    """
+
+    id: str
+    nom_historique: str | None = None
+    typologie: str | None = None
+    adresse: str | None = None
+    arrondissement: str
+    latitude: float | None = None
+    longitude: float | None = None
+    debut_travaux: int | None = None
+    fin_travaux: int | None = None
+    historique_sommaire: str | None = None
+    statut_juridique: str | None = None
+    url_montreal: str
+    url_rpcq: str | None = None
+    url_photo: str | None = None
+
+
 class BuildingEnriched(BaseModel):
     """Final enriched record — JSONL output format for the RAG engine."""
 
