@@ -11,6 +11,7 @@ from ingestion_patrimoine_mtl.pipeline.s06_export import (
     BUILDINGS_GEOJSON_FILENAME,
     BUILDINGS_JSON_FILENAME,
     MONTREAL_URL_TEMPLATE,
+    STATS_JSON_FILENAME,
     run,
 )
 from ingestion_patrimoine_mtl.utils.geo import is_in_montreal_bbox
@@ -66,3 +67,15 @@ class TestMontrealUrl:
 
         building = public.set_index("id").loc["0039-27-4599-00"]
         assert building["url_montreal"] == MONTREAL_URL_TEMPLATE.format(id="0039-27-4599-00")
+
+
+class TestStats:
+    def test_stats_totals_reconcile_with_source_frame(self, export_source: Settings) -> None:
+        """total_buildings, buildings_with_coordinates and facet sums match the source frame."""
+        public = run(export_source)
+
+        stats = json.loads((export_source.stage_06_out / STATS_JSON_FILENAME).read_text())
+
+        assert stats["total_buildings"] == len(public)
+        assert stats["buildings_with_coordinates"] == int(public["latitude"].notna().sum())
+        assert sum(stats["by_arrondissement"].values()) == len(public)
