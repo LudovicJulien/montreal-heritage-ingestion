@@ -10,6 +10,7 @@ from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.pipeline.s06_export import (
     BUILDINGS_GEOJSON_FILENAME,
     BUILDINGS_JSON_FILENAME,
+    MONTREAL_URL_TEMPLATE,
     run,
 )
 from ingestion_patrimoine_mtl.utils.geo import is_in_montreal_bbox
@@ -56,3 +57,12 @@ class TestGeoJson:
 
         assert "0039-28-0003-00" not in geojson_ids
         assert "0039-28-0003-00" in building_ids
+
+
+class TestMontrealUrl:
+    def test_url_built_from_identifier_no_request_made(self, export_source: Settings) -> None:
+        """url_montreal is a deterministic string built from the identifier — no HTTP call."""
+        public = run(export_source)
+
+        building = public.set_index("id").loc["0039-27-4599-00"]
+        assert building["url_montreal"] == MONTREAL_URL_TEMPLATE.format(id="0039-27-4599-00")
