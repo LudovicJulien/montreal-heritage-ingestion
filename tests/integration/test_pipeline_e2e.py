@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import pytest
 
@@ -257,6 +259,21 @@ class TestPipelineE2E:
 
         for filename in ("buildings.geojson", "buildings.json", "stats.json"):
             assert (pipeline_source.stage_06_out / filename).is_file()
+
+    def test_output_record_count_matches_input(self, pipeline_source: Settings) -> None:
+        """buildings.json holds input_rows - rejected, not the input count untouched.
+
+        ADR-004 rejects exactly one row of the ten — the one with no
+        identifiant_batiment — so ``output == input - rejected`` is the
+        assertion, never a bare row-count equality.
+        """
+        input_rows = len(_REAL_ROWS) + 1
+        rejected = 1
+
+        _run_full_pipeline(pipeline_source)
+
+        buildings = json.loads((pipeline_source.stage_06_out / "buildings.json").read_text())
+        assert len(buildings) == input_rows - rejected
 
     def test_all_record_hashes_are_unique(self, pipeline_source: Settings) -> None:
         """Every record_hash stage 01 computes is distinct across the ten source rows."""
