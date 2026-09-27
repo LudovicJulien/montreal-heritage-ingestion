@@ -1,13 +1,13 @@
 # Montreal Heritage Ingestion Pipeline
 
-> **A production-grade data ingestion pipeline that transforms raw open data into enriched, RAG-ready records — with contractual data quality, full reproducibility, and French NLP.**
+> **A production-grade data ingestion pipeline that transforms raw open data into enriched, RAG-ready records, with contractual data quality, full reproducibility, and French NLP.**
 
-This pipeline ingests the **1,336 heritage buildings** published by [Données Montréal](https://donnees.montreal.ca), the Ville de Montréal open data portal, applies multi-stage cleaning and validation, and extracts named entities with spaCy to produce structured JSONL records ready for downstream retrieval systems.
+This pipeline ingests the **1,336 heritage buildings** published by [Données Montréal](https://donnees.montreal.ca), the Ville de Montréal open data portal, applies multi-stage cleaning and validation, reconciles them against Quebec's official heritage registry (RPCQ), and maps their typology onto a controlled vocabulary. Named-entity extraction with spaCy is planned but not yet implemented; see [Project Status](#project-status).
 
-> The source file counts 1,336 records over 2,743 physical lines: 272 buildings carry a multi-paragraph `HISTORIQUE_SOMMAIRE` with embedded newlines. Line counts are not record counts here — see [03-normalize.md](docs/pipeline/03-normalize.md).
+> The source file counts 1,336 records over 2,743 physical lines: 272 buildings carry a multi-paragraph `HISTORIQUE_SOMMAIRE` with embedded newlines. Line counts are not record counts here; see [03-normalize.md](docs/pipeline/03-normalize.md).
 
 ![CI](https://github.com/LudovicJulien/montreal-heritage-ingestion/actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-0.4.2-brightgreen)
+![Version](https://img.shields.io/badge/version-0.5.0-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![DVC](https://img.shields.io/badge/DVC-3.50+-purple)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
@@ -17,19 +17,24 @@ This pipeline ingests the **1,336 heritage buildings** published by [Données Mo
 
 ## Project Status
 
-The pipeline is being built stage by stage. Stages 01, 01b and 02 to 03 are implemented, tested,
-and locked in DVC; stage 04 exists as a typed skeleton.
+The pipeline is being built stage by stage. Stages 01, 01b, 02, 03 and 04 are implemented, tested,
+and locked in DVC. Stage 05 is partially implemented: the typology mapping is done, named-entity
+extraction is not.
 
 | Stage | Status | Notes |
 |---|---|---|
 | 01 · Ingest | ✅ **Implemented** | Encoding detection, SHA-256 hashing, idempotence, `RawSchema` |
-| 01b · Ingest RPCQ | ✅ **Implemented** | Second source: two Données Québec exports reconciled into 179 Montreal records, `RpcqRawSchema` — see [01b-rpcq.md](docs/pipeline/01b-rpcq.md) and [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md) |
+| 01b · Ingest RPCQ | ✅ **Implemented** | Second source: two Données Québec exports reconciled into 179 Montreal records, `RpcqRawSchema`. See [01b-rpcq.md](docs/pipeline/01b-rpcq.md) and [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md). |
 | 02 · Clean | ✅ **Implemented** | HTML stripping, ftfy, French typography, `CleanSchema` |
-| 03 · Normalize | ✅ **Implemented** | Borough canonicalization, sentinel-year nullification, WGS84 validation, `NormalizedSchema` — see [03-normalize.md](docs/pipeline/03-normalize.md) and [ADR-004](docs/adr/ADR-004-data-quality-policy.md) |
-| 04 · Enrich | ⏳ **Planned** | spaCy is not yet a declared dependency |
+| 03 · Normalize | ✅ **Implemented** | Borough canonicalization, sentinel-year nullification, WGS84 validation, `NormalizedSchema`. See [03-normalize.md](docs/pipeline/03-normalize.md) and [ADR-004](docs/adr/ADR-004-data-quality-policy.md). |
+| 04 · Merge | ✅ **Implemented** | Fuzzy entity resolution against the RPCQ (147 of 1335 buildings matched), `MergedSchema`. See [04-merge.md](docs/pipeline/04-merge.md). |
+| 05 · Enrich | 🟡 **Partial** | Typology mapped onto a controlled vocabulary (`utils/taxonomy.py`). NER is a separate, undecided branch (`feat/05b-ner`); spaCy is not yet a declared dependency. See [05-enrich.md](docs/pipeline/05-enrich.md). |
 
-`dvc repro` runs stages 01, 01b and 02–03, and stops at `s04_enrich`. The unit tests for stage 04 and the
-end-to-end integration tests are `@pytest.mark.skip` placeholders naming the cases to cover.
+`dvc repro` runs stages 01, 01b, 02, 03 and 04, and stops there: stage 05 has no DVC stage yet,
+since `run()` still raises `NotImplementedError` pending the NER decision. The taxonomy mapping is
+tested in isolation and does not need one to be useful: `feat/06-export` can call it directly. The
+NER unit tests and the end-to-end integration tests are `@pytest.mark.skip` placeholders naming
+the cases left to cover.
 
 ---
 
@@ -61,7 +66,7 @@ rawData/edifices_patrimoine.csv  (1,336 buildings · 16 columns)
          v
 data/01_raw/buildings_raw.parquet          <- RawSchema (Pandera)
          |
-         |    Données Québec open data (donneesquebec.ca) — CC-BY 4.0
+         |    Données Québec open data (donneesquebec.ca), CC-BY 4.0
          |             |
          |             v  make rpcq-download
          |    rawData/rpcq/*.csv  (621 classés + 730 cités)
@@ -87,19 +92,25 @@ data/02_clean/buildings_clean.parquet      <- CleanSchema (Pandera)
          v
 data/03_normalized/buildings_normalized.parquet   <- NormalizedSchema (Pandera)
          |
-         v  [04 · Enrich]
-         |  spaCy fr_core_news_lg batch NER · entity extraction (PER, ORG, LOC, DATE)
-         |  BuildingEnriched assembly · JSONL serialization
+         v  [04 · Merge]  <- data/01b_rpcq/rpcq_raw.parquet joins here (fuzzy: no join key exists)
+         |  candidate pairs within 150 m · name + distance scoring · outranked-claim rule (ADR-004)
+         |  RPCQ field join · historique_sommaire fill · crosswalk export
          v
-data/04_enriched/buildings_enriched.jsonl
+data/04_merged/buildings_merged.parquet    <- MergedSchema (Pandera)
+         |
+         v  [05 · Enrich, partial]
+         |  typology mapped onto a controlled vocabulary (utils/taxonomy.py): done
+         |  spaCy fr_core_news_lg NER · BuildingEnriched assembly · JSONL serialization: not yet implemented
+         v
+data/05_enriched/buildings_enriched.jsonl  (planned output, not produced yet)
 ```
 
 **Key design decisions:**
 
-- **Parquet between stages** — columnar format preserves types across boundaries; no schema drift between runs
-- **Pandera contracts** — each stage transition is gated by an explicit DataFrame schema; bad data fails loudly, not silently
-- **SHA-256 idempotency** — records already processed on a previous run are skipped without re-computation
-- **DVC pipeline** — `dvc repro` re-runs only the stages downstream of what changed; the full 4-stage run is a single command
+- **Parquet between stages**: columnar format preserves types across boundaries, with no schema drift between runs
+- **Pandera contracts**: each stage transition is gated by an explicit DataFrame schema, so bad data fails loudly, not silently
+- **SHA-256 idempotency**: records already processed on a previous run are skipped without re-computation
+- **DVC pipeline**: `dvc repro` re-runs only the stages downstream of what changed; the full 01-to-04 run is a single command
 
 ### Architecture Decision Records
 
@@ -112,7 +123,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | [ADR-003](docs/adr/ADR-003-sha256-row-hashing-for-idempotence.md) | Why SHA-256 per-row hashing for idempotent re-runs |
 | [ADR-004](docs/adr/ADR-004-data-quality-policy.md) | When to reject a row, nullify a field, or normalize a value |
 | [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md) | Why the RPCQ open data exports come before scraping |
-| [ADR-006](docs/adr/ADR-006-no-web-scraping.md) | Why open data exports are the only acquisition channel — no scraping |
+| [ADR-006](docs/adr/ADR-006-no-web-scraping.md) | Why open data exports are the only acquisition channel, no scraping |
 
 ### Stage-by-Stage Documentation
 
@@ -121,9 +132,11 @@ A function-by-function walkthrough of each stage, with real examples from the da
 | Stage | Doc |
 |-------|-----|
 | 01 · Ingest | [docs/pipeline/01-ingest.md](docs/pipeline/01-ingest.md) |
-| 01b · Ingest RPCQ | [docs/pipeline/01b-rpcq.md](docs/pipeline/01b-rpcq.md) — walkthrough + open data profile |
+| 01b · Ingest RPCQ | [docs/pipeline/01b-rpcq.md](docs/pipeline/01b-rpcq.md), walkthrough + open data profile |
 | 02 · Clean | [docs/pipeline/02-clean.md](docs/pipeline/02-clean.md) |
-| 03 · Normalize | [docs/pipeline/03-normalize.md](docs/pipeline/03-normalize.md) — walkthrough + data profile |
+| 03 · Normalize | [docs/pipeline/03-normalize.md](docs/pipeline/03-normalize.md), walkthrough + data profile |
+| 04 · Merge | [docs/pipeline/04-merge.md](docs/pipeline/04-merge.md), matching policy + measured match rate |
+| 05 · Enrich | [docs/pipeline/05-enrich.md](docs/pipeline/05-enrich.md), taxonomy mapping (NER not yet implemented) |
 
 ---
 
@@ -137,20 +150,26 @@ A function-by-function walkthrough of each stage, with real examples from the da
 | Curly apostrophes / guillemets inconsistency | 02 | Custom French typography normalizer |
 | Construction dates outside plausible range | 03 | Pydantic validator: `[1600, 2030]`, nullify on violation |
 | Coordinates outside Montreal island | 03 | `is_in_montreal_bbox()` against WGS84 bbox |
-| Borough labels matching no official name | 03 | `canonicalize_municipality()` — suffix, em dash and apostrophe — then the 19 boroughs + 15 villes liées allowlist |
-| Flat text without entity metadata | 04 | spaCy `fr_core_news_lg` batch NER -> structured `BuildingEntities` |
+| Borough labels matching no official name | 03 | `canonicalize_municipality()` (suffix, em dash and apostrophe), then the 19 boroughs + 15 villes liées allowlist |
+| No join key between the corpus and the RPCQ | 04 | Fuzzy match on normalized name + haversine distance, ADR-004-governed |
+| Inconsistent casing and sentinel values in `typologie_specifique` | 05 | `utils/taxonomy.py`, casefolded mapping onto a controlled vocabulary |
+| Flat text without entity metadata | 05 (planned) | spaCy `fr_core_news_lg` batch NER, not yet implemented, see `feat/05b-ner` |
 
 ---
 
 ## Output Format
 
-Each record in `buildings_enriched.jsonl` is a self-contained building object:
+`buildings_enriched.jsonl` is stage 05's target output, one self-contained building object per
+line. It is not produced yet: `run()` still raises `NotImplementedError` pending the NER decision
+(`feat/05b-ner`, see [Project Status](#project-status)). The shape below is what stage 05 will
+write once NER lands; `typologie` already reflects the controlled vocabulary `utils/taxonomy.py`
+maps onto today.
 
 ```json
 {
   "id": "0039-27-4599-00",
   "nom_historique": "Maisons-magasins Jacob-De Witt I",
-  "typologie": "Immeuble commercial",
+  "typologie": "magasin-entrepôt",
   "adresse": "365, rue McGill",
   "arrondissement": "Ville-Marie",
   "latitude": 45.5019,
@@ -166,7 +185,7 @@ Each record in `buildings_enriched.jsonl` is a self-contained building object:
   },
   "record_hash": "a3f2c1...",
   "ingested_at": "2026-06-09T14:00:00Z",
-  "pipeline_version": "0.4.2"
+  "pipeline_version": "0.5.0"
 }
 ```
 
@@ -195,7 +214,7 @@ DVC tracks pipeline artifacts (Parquet, JSONL). Each contributor sets their own 
 dvc remote add -d local /your/path/to/dvc-store --local
 ```
 
-The URL is written to `.dvc/config.local` which is gitignored — your path never reaches the repository.
+The URL is written to `.dvc/config.local` which is gitignored; your path never reaches the repository.
 
 ### Run the full pipeline
 
@@ -205,8 +224,8 @@ make rpcq-download # fetch both RPCQ exports from Données Québec (~4.8 MB)
 dvc repro          # run the implemented stages, skip unchanged ones
 ```
 
-> `dvc repro` currently completes stages 01 to 03, then stops at `s04_enrich`, which is not
-> implemented yet. See [Project Status](#project-status).
+> `dvc repro` currently completes stages 01 to 04, then stops: stage 05 has no DVC stage yet, since
+> `run()` still raises `NotImplementedError`. See [Project Status](#project-status).
 
 ### Run a single stage
 
@@ -266,7 +285,7 @@ cp .env.example .env
 | `INGESTION_RAW_DATA_DIR` | `rawData` | Source CSV directory |
 | `INGESTION_SOURCE_FILE` | `edifices_patrimoine.csv` | Source CSV filename |
 | `INGESTION_DATA_DIR` | `data` | Pipeline output root |
-| `INGESTION_PIPELINE_VERSION` | `0.4.2` | Version stamped on every ingested row |
+| `INGESTION_PIPELINE_VERSION` | `0.5.0` | Version stamped on every ingested row |
 | `INGESTION_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `INGESTION_LOG_FORMAT` | `dev` | `dev` (colored) or `json` (structured, for CI/prod) |
 
@@ -278,10 +297,11 @@ cp .env.example .env
 |-------|-----------|-------|
 | Data versioning | DVC 3.50+ | Stage-level reproducibility, output caching |
 | DataFrame contracts | Pandera 0.20 | Schema validation at every stage boundary |
-| Data modeling | Pydantic v2 | `BuildingRaw`, `BuildingEnriched` domain models |
+| Data modeling | Pydantic v2 | `BuildingRaw`, `RpcqBuilding`, `BuildingEnriched` domain models |
 | Text cleaning | BeautifulSoup + ftfy | HTML stripping + encoding repair |
 | Encoding detection | chardet | Auto-detect before CSV parsing |
-| NER | spaCy `fr_core_news_lg` | French named entity recognition |
+| Entity resolution | stdlib `difflib` + haversine | Fuzzy name + distance match against the RPCQ, no new dependency |
+| NER | spaCy `fr_core_news_lg` | French named entity recognition, planned, not yet a declared dependency |
 | Geo validation | Custom + WGS84 bbox | Montreal island boundary + 19 boroughs |
 | Serialization | Parquet (pyarrow) + JSONL | Typed intermediates, flat final output |
 | Config | pydantic-settings | `.env` + env vars, typed, validated |
@@ -296,7 +316,7 @@ cp .env.example .env
 ```
 montreal-heritage-ingestion/
 ├── src/ingestion_patrimoine_mtl/
-│   ├── config.py            # Pydantic BaseSettings — paths + pipeline flags
+│   ├── config.py            # Pydantic BaseSettings: paths + pipeline flags
 │   ├── models.py            # BuildingRaw · RpcqBuilding · BuildingEntities · BuildingEnriched
 │   ├── schemas.py           # Pandera DataFrame contracts per stage
 │   ├── pipeline/
@@ -304,10 +324,13 @@ montreal-heritage-ingestion/
 │   │   ├── s01b_rpcq.py     # RPCQ open data · layout reconciliation · region filter
 │   │   ├── s02_clean.py     # HTML · ftfy · French typography
 │   │   ├── s03_normalize.py # Pydantic validation · geo · address normalization
-│   │   └── s04_enrich.py    # spaCy NER · JSONL export
+│   │   ├── s04_merge.py     # Fuzzy RPCQ entity resolution · crosswalk export
+│   │   └── s05_enrich.py    # Typology mapping (done) · spaCy NER · JSONL export (planned)
 │   └── utils/
 │       ├── hashing.py       # SHA-256 per-row · DataFrame hashing
 │       ├── geo.py           # Montreal bbox · Lambert->WGS84 · borough list
+│       ├── matching.py      # Name normalization · haversine distance
+│       ├── taxonomy.py      # typologie_specifique -> controlled vocabulary mapping
 │       └── logging.py       # loguru setup (dev / json)
 ├── scripts/
 │   ├── download_raw_data.py # Fetch CSV from Données Montréal + integrity check
@@ -316,15 +339,16 @@ montreal-heritage-ingestion/
 │   ├── unit/                # Isolated tests per utility and stage
 │   └── integration/         # End-to-end pipeline on sample records
 ├── docs/adr/                # Architecture Decision Records
-├── docs/pipeline/           # Stage-by-stage walkthrough (01-ingest.md, 01b-rpcq.md, 02-clean.md, 03-normalize.md)
+├── docs/pipeline/           # Stage-by-stage walkthrough (01-ingest.md, 01b-rpcq.md, 02-clean.md, 03-normalize.md, 04-merge.md, 05-enrich.md)
 ├── data/                    # Pipeline outputs (DVC-tracked, git-ignored)
 │   ├── 01_raw/
 │   ├── 01b_rpcq/
 │   ├── 02_clean/
 │   ├── 03_normalized/
-│   └── 04_enriched/
+│   ├── 04_merged/
+│   └── 05_enriched/         # empty until stage 05's run() is implemented
 ├── .env.example             # Environment variable reference
-├── dvc.yaml                 # 5-stage DVC pipeline definition
+├── dvc.yaml                 # 5-stage DVC pipeline definition (01, 01b, 02, 03, 04; 05 not wired in yet)
 └── rawData/                 # Source CSVs (git-ignored, reproducible via make download / rpcq-download)
 ```
 
@@ -332,4 +356,4 @@ montreal-heritage-ingestion/
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU General Public License v3.0**; see the [LICENSE](LICENSE) file for details.

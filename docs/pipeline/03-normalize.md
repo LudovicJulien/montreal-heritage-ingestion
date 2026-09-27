@@ -1,4 +1,4 @@
-# Stage 03 — `s03_normalize.py`
+# Stage 03: `s03_normalize.py`
 
 This document has two parts. **The walkthrough** explains, function by function, what
 `s03_normalize.py` does, with before/after values taken from the project's real data. **The data
@@ -8,12 +8,12 @@ reference to re-run after any source refresh.
 For the quality policy this stage applies (reject / nullify / normalize), see
 [ADR-004](../adr/ADR-004-data-quality-policy.md).
 
-Previous stage: [02 — Clean](02-clean.md).
+Previous stage: [02, Clean](02-clean.md).
 
 ---
 
-**Input**: `data/02_clean/buildings_clean.parquet` — 1336 rows × 20 columns
-**Output**: `data/03_normalized/buildings_normalized.parquet` — 1335 rows × 21 columns
+**Input**: `data/02_clean/buildings_clean.parquet`, 1336 rows × 20 columns
+**Output**: `data/03_normalized/buildings_normalized.parquet`, 1335 rows × 21 columns
 
 The critical point: this stage reads **the output of stage 02, not the source CSV**. Stage 02
 rewrites text before stage 03 ever sees it, and one of those rewrites actively breaks borough
@@ -23,7 +23,7 @@ matching (see §2). Every figure below was measured on `buildings_clean.parquet`
 
 # Walkthrough
 
-This is the first stage allowed to *change the meaning* of a value — stages 01 and 02 are
+This is the first stage allowed to *change the meaning* of a value: stages 01 and 02 are
 deliberately non-destructive. Execution order in `run()`:
 
 ```
@@ -46,7 +46,7 @@ preserve. Every other violation degrades a field and keeps the row.
 
 ### `_normalize_voie_type`
 
-**Real example** — building `9947-27-1424-01`, *Maison Longpré*:
+**Real example**: building `9947-27-1424-01`, *Maison Longpré*:
 
 | | Value |
 |---|---|
@@ -62,7 +62,7 @@ A deliberate no-op on this extract: `822 → 822` nulls, no value touched. The c
 `Est` (258), `Ouest` (256) and null. The `E → Est` / `O → Ouest` mapping stays as a guard, so that
 a refresh reintroducing abbreviations is normalized rather than carried through silently.
 
-An unrecognized value is nullified and logged at `WARNING` — never raised on.
+An unrecognized value is nullified and logged at `WARNING`, never raised on.
 
 ### `_validate_arrondissement`
 
@@ -79,13 +79,13 @@ canonicalization, **all 1336** do.
 | Ville liée | `9999-42-0001-01` | `Westmount` | `Westmount` | **`ville_liee`** |
 
 The three causes stack: the `" (Montréal)"` suffix the source appends everywhere, the em dash
-U+2014 against the en dash U+2013 of the official names, and the typographic apostrophe U+2019 —
+U+2014 against the en dash U+2013 of the official names, and the typographic apostrophe U+2019,
 that last one introduced by **our own stage 02**, doing its French-typography job correctly while
 breaking stage 03's matching. Normalizing at comparison time is what keeps the two stages
 decoupled.
 
 Corpus result: **1305 boroughs, 30 villes liées**. The 30 are kept and tagged rather than
-rejected — Westmount, Dorval and Senneville hold real heritage buildings. See §3.
+rejected: Westmount, Dorval and Senneville hold real heritage buildings. See §3.
 
 ### `_cast_years`
 
@@ -106,14 +106,14 @@ supports, indistinguishable downstream from a real one.
 
 ### `_cast_coordinates`
 
-**Real example** — building `0039-27-4599-00`:
+**Real example**: building `0039-27-4599-00`:
 
 | Field | CLEAN | NORMALIZED | Meaning |
 |---|---|---|---|
 | `centro_x` | `'-73.5579'` | `-73.5579` | **longitude** |
 | `centro_y` | `'45.5001'` | `45.5001` | **latitude** |
 
-No projection is applied — the source is already WGS84 (§5). Zero rows fall outside the bounding
+No projection is applied: the source is already WGS84 (§5). Zero rows fall outside the bounding
 box in this extract, so the check is a regression guard for future refreshes, not a filter.
 Coordinates are nullified **as a pair**: half a position cannot place a building.
 
@@ -137,8 +137,8 @@ after a refresh invisible. These counts are the audit trail.
 
 ### `_validate_schema` and `_write_parquet`
 
-Validates against `NormalizedSchema` — which enforces the agglomeration allowlist on
-`arrondissement`, the bbox on the coordinates, and the two permitted `municipalite_type` values —
+Validates against `NormalizedSchema`, which enforces the agglomeration allowlist on
+`arrondissement`, the bbox on the coordinates, and the two permitted `municipalite_type` values,
 then writes snappy Parquet to `data/03_normalized/buildings_normalized.parquet`.
 
 ## Balance sheet
@@ -158,9 +158,9 @@ rejected row, which already carried one. Same for `debut` (22 sentinels − 1) a
 
 ## What the stage deliberately does not do
 
-No imputation — an absent field stays absent. No rounding, no clamping. **No deduplication**: the
+No imputation: an absent field stays absent. No rounding, no clamping. **No deduplication**: the
 duplicated `identifiant_batiment` survives, because the two rows differ in content and choosing
-between them needs a business rule nobody has written. And no web-facing shaping — that belongs to
+between them needs a business rule nobody has written. And no web-facing shaping: that belongs to
 the frontend build, not to the pipeline.
 
 ---
@@ -179,7 +179,7 @@ The source CSV spans **2743 physical lines** but holds **1336 records**. The ari
 
 **272 of the 1336 buildings** carry a multi-paragraph `HISTORIQUE_SOMMAIRE`, quoted and spanning
 several lines each. A well-formed CSV is not a line-per-record format, so `wc -l` minus the header
-yields 2742 — a figure that circulated through the README and two ADRs before being traced back
+yields 2742, a figure that circulated through the README and two ADRs before being traced back
 here. Only a quote-aware parser gives the right count, which `pandas.read_csv` has done correctly
 since stage 01: the pipeline was never affected, only the prose.
 
@@ -192,7 +192,7 @@ After stage 02, on 1336 rows:
 
 | Column | Nulls | % | Note |
 |---|---:|---:|---|
-| `identifiant_batiment` | 1 | 0.1 % | intended as the primary key — see §6 |
+| `identifiant_batiment` | 1 | 0.1 % | intended as the primary key, see §6 |
 | `nom_historique` | 30 | 2.2 % | |
 | `typologie_specifique` | 145 | 10.9 % | note: the model calls this `typologie` |
 | `civique_min` | 37 | 2.8 % | |
@@ -203,14 +203,14 @@ After stage 02, on 1336 rows:
 | `est_ouest` | 822 | 61.5 % | absence is normal, not a defect |
 | `arrondissement` | 0 | 0.0 % | |
 | `lien` | 1130 | 84.6 % | |
-| `historique_sommaire` | 1040 | 77.8 % | **the RAG text source — see §7** |
+| `historique_sommaire` | 1040 | 77.8 % | **the RAG text source, see §7** |
 | `debut_des_travaux` | 320 | 24.0 % | |
 | `fin_des_travaux` | 667 | 49.9 % | |
 | `centro_x` / `centro_y` | 60 | 4.5 % | always null as a pair |
 
 ---
 
-## 2. `arrondissement` — three separate mismatch causes
+## 2. `arrondissement`: three separate mismatch causes
 
 `MONTREAL_ARRONDISSEMENTS` in `utils/geo.py` matches **0 of the 1336 rows** as-is. Three
 independent causes stack up:
@@ -223,7 +223,7 @@ independent causes stack up:
 
 Cause 3 is the one to remember: `_normalize_french_typography` in stage 02 is doing its job
 correctly, and in doing so it invalidates a constant defined in stage 00. Normalizing the borough
-name before comparison — rather than "fixing" the typography stage or hand-patching the constant —
+name before comparison, rather than "fixing" the typography stage or hand-patching the constant,
 is what keeps the two stages decoupled.
 
 After normalizing all three (strip suffix, em→en dash, curly→straight apostrophe):
@@ -235,7 +235,7 @@ After normalizing all three (strip suffix, em→en dash, curly→straight apostr
 
 ## 3. The remaining 30 rows are not errors
 
-They are **villes liées** — independent municipalities of the Montreal agglomeration that are not
+They are **villes liées**: independent municipalities of the Montreal agglomeration that are not
 boroughs of the Ville de Montréal:
 
 | Municipality | Rows |
@@ -252,11 +252,11 @@ boroughs of the Ville de Montréal:
 | **Total** | **30** |
 
 These are real heritage buildings with valid coordinates and valid history. The docstring currently
-on `_validate_arrondissement` — *"Reject rows whose ARRONDISSEMENT is not in the official
-19-borough list"* — would delete all 30. [ADR-004](../adr/ADR-004-data-quality-policy.md) decides
+on `_validate_arrondissement`, *"Reject rows whose ARRONDISSEMENT is not in the official
+19-borough list,"* would delete all 30. [ADR-004](../adr/ADR-004-data-quality-policy.md) decides
 against that: they are kept and tagged.
 
-## 4. `debut_des_travaux` / `fin_des_travaux` — sentinel values, not outliers
+## 4. `debut_des_travaux` / `fin_des_travaux`: sentinel values, not outliers
 
 Both columns are typed as text after stage 02 and carry **sentinel values standing in for
 "unknown"**:
@@ -268,18 +268,18 @@ Both columns are typed as text after stage 02 and carry **sentinel values standi
 | `9999` | 15 | 0 |
 | valid in [1600, 2030] | 994 | 427 |
 | observed valid range | 1669 – 2011 | 1670 – 2013 |
-| rows where `fin < debut` | — | 0 |
+| rows where `fin < debut` | n/a | 0 |
 
-`0` and `9999` are the only out-of-range values — there are no genuine outliers such as `184` or
+`0` and `9999` are the only out-of-range values: there are no genuine outliers such as `184` or
 `18466`. The `[1600, 2030]` bound is therefore doing exactly one job: catching these two sentinels.
 
 The volume is what forces the policy: **242 rows (18 % of the dataset) carry `fin_des_travaux = 0`.**
 Rejecting rows on an invalid year would cost a fifth of the corpus to encode a fact the source
-already states plainly — that the end date is unknown. Nullification is the only defensible choice.
+already states plainly, that the end date is unknown. Nullification is the only defensible choice.
 
 The absence of any `fin < debut` inconsistency means no cross-field arbitration is needed.
 
-## 5. Coordinates — already WGS84, and X/Y are not in the intuitive order
+## 5. Coordinates: already WGS84, and X/Y are not in the intuitive order
 
 | | `centro_x` | `centro_y` |
 |---|---|---|
@@ -291,30 +291,30 @@ The absence of any `fin < debut` inconsistency means no cross-field arbitration 
 Two consequences:
 
 - **The CRS question is closed.** The source is already WGS84, not Lambert NAD83 (EPSG:32198). The
-  open question in `schemas.py` and the `lambert_to_wgs84()` stub in `utils/geo.py` — which raises
-  `NotImplementedError("Verify the CRS of CENTRO_X/Y before implementing")` — can both be removed.
+  open question in `schemas.py` and the `lambert_to_wgs84()` stub in `utils/geo.py`, which raises
+  `NotImplementedError("Verify the CRS of CENTRO_X/Y before implementing")`, can both be removed.
   No `pyproj` dependency is needed.
 - **`centro_x` is the longitude.** `BuildingEnriched` exposes `latitude` and `longitude`, so the
   mapping is `latitude ← centro_y`, `longitude ← centro_x`. Inverting them puts every building in
-  Somalia, and the bbox check in `NormalizedSchema` would not catch it — the two ranges do not
+  Somalia, and the bbox check in `NormalizedSchema` would not catch it: the two ranges do not
   overlap, so the error surfaces as a schema failure rather than as silently wrong coordinates.
 
 Coordinate validation has nothing to reject: 0 rows fall outside the bounding box. The bbox
 constraint is a regression guard for future data refreshes, not a filter for the current dataset.
 
-## 6. `identifiant_batiment` — not a usable primary key
+## 6. `identifiant_batiment`: not a usable primary key
 
 - 1335 distinct values for 1336 rows: **one duplicate**.
-- **One null** — while `NormalizedSchema` declares `identifiant_batiment: Series[str]` as
+- **One null**, while `NormalizedSchema` declares `identifiant_batiment: Series[str]` as
   non-nullable.
 - All 1336 `record_hash` values are distinct, so the two rows sharing an identifier differ in
   content; they are not a duplicated record.
 
 `record_hash` is the only truly unique key on this dataset. `BuildingEnriched.id` maps from
-`identifiant_batiment`, which means stage 04 needs a decision for the null case — covered by
+`identifiant_batiment`, which means stage 04 needs a decision for the null case, covered by
 [ADR-004](../adr/ADR-004-data-quality-policy.md).
 
-## 7. `historique_sommaire` is 77.8 % null — this constrains stage 04
+## 7. `historique_sommaire` is 77.8 % null: this constrains stage 04
 
 `BuildingEnriched.text` is the field the RAG engine retrieves on, and `historique_sommaire` is its
 only natural source. **1040 of 1336 buildings have no historical summary at all**, leaving 296 with
@@ -332,11 +332,11 @@ Measured against the data, the docstrings in `s03_normalize.py` need these corre
 
 | Stub | Current docstring | Reality |
 |---|---|---|
-| `_normalize_est_ouest` | `E → Est, O → Ouest` | The column holds only `Est` (258), `Ouest` (256), null (822). **No abbreviations exist.** The function has nothing to do on this dataset — keep it as a guard for future refreshes, or drop it. |
+| `_normalize_est_ouest` | `E → Est, O → Ouest` | The column holds only `Est` (258), `Ouest` (256), null (822). **No abbreviations exist.** The function has nothing to do on this dataset; keep it as a guard for future refreshes, or drop it. |
 | `_normalize_voie_type` | `Rue → rue, Avenue → avenue` | 16 distinct values → 15 after lowercasing. The **single** case collision is `Avenue` (6) vs `avenue` (89). Also present: `road` (4), an English type that lowercasing will not translate. |
 | `_validate_arrondissement` | "Reject rows" not in the 19-borough list | Would delete 30 valid buildings; and matching cannot work at all without the §2 normalization first. |
 | `_cast_coordinates` | "Cast to float and validate against the bbox" | Correct, but must not implement any Lambert conversion (§5). |
-| `_cast_years` | "Cast to nullable int, clamped to [1600, 2030]" | Correct in intent — but *clamping* would turn `9999` into `2030`, inventing a date. It must **nullify**, not clamp. |
+| `_cast_years` | "Cast to nullable int, clamped to [1600, 2030]" | Correct in intent, but *clamping* would turn `9999` into `2030`, inventing a date. It must **nullify**, not clamp. |
 
 ## 9. Schema consequences
 
@@ -353,7 +353,7 @@ non-nullable but contain nulls after stage 02:
 required, because the stage rejects the rows that lack one; `nom_historique` and `voie` become
 `nullable=True`.
 
-`arrondissement` is non-null in the source (0/1336), but it must be **nullable too** — the stage
+`arrondissement` is non-null in the source (0/1336), but it must be **nullable too**: the stage
 nullifies a municipality matching neither a borough nor a known ville liée, so the column can hold
 a null even though the source never does. No row hits that path in the current extract; declaring
 it non-nullable would work today and break on the first refresh that introduces an unknown

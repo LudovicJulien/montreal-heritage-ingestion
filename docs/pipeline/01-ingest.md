@@ -1,17 +1,17 @@
-# Stage 01 — `s01_ingest.py`
+# Stage 01: `s01_ingest.py`
 
 This document explains, function by function, what `s01_ingest.py` does, with examples taken from the project's real data (`data/01_raw/buildings_raw.parquet`).
 
 For architectural context (why four stages, why Parquet, why a SHA-256 hash), see [ADR-001](../adr/ADR-001-four-stage-pipeline-architecture.md) and [ADR-003](../adr/ADR-003-sha256-row-hashing-for-idempotence.md).
 
-Next stage: [02 — Clean](02-clean.md).
+Next stage: [02, Clean](02-clean.md).
 
 ---
 
 **Input**: `rawData/edifices_patrimoine.csv` (downloaded from Données Montréal via `scripts/download_raw_data.py`)
 **Output**: `data/01_raw/buildings_raw.parquet`
 
-### `run(cfg)` — orchestration
+### `run(cfg)`: orchestration
 
 Runs the sub-steps below in order, then logs the number of rows processed.
 
@@ -22,14 +22,14 @@ Checks that the source CSV exists before anything else. If it is missing, raises
 ### `_detect_encoding`
 
 Detects the file encoding from a 100,000-byte sample:
-1. Attempts a strict UTF-8 decode — if it succeeds, the file is UTF-8.
+1. Attempts a strict UTF-8 decode; if it succeeds, the file is UTF-8.
 2. Otherwise, falls back to `chardet`.
 
 ### `_load_csv`
 
 Loads the CSV in chunks of 500 rows (`tqdm` progress bar), with **`dtype=str` everywhere**. No typing is done at this stage: ingestion must preserve the raw fidelity of the data (e.g. leading zeros in identifiers).
 
-**Example** — `identifiant_batiment` stays a string, leading zero preserved:
+**Example**: `identifiant_batiment` stays a string, leading zero preserved:
 
 | Column | Value |
 |---|---|
@@ -41,7 +41,7 @@ Had this column been cast to a number, the `0039` prefix would have lost its mea
 
 Cleans up the CSV headers: trims whitespace, then lowercases.
 
-**Example** — raw CSV header:
+**Example**: raw CSV header:
 ```
 IDENTIFIANT_BATIMENT,NOM_HISTORIQUE ,TYPOLOGIE_SPECIFIQUE,...,HISTORIQUE_SOMMAIRE ,...
 ```

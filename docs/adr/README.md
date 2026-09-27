@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-This directory documents the key architectural choices made in the Montreal Heritage Ingestion pipeline. Each ADR captures a decision in context — what we chose, why, and what it costs.
+This directory documents the key architectural choices made in the Montreal Heritage Ingestion pipeline. Each ADR captures a decision in context: what we chose, why, and what it costs.
 
 ## How to Read ADRs
 
@@ -11,7 +11,7 @@ Each record follows the same four-section structure:
 | **Context** | What problem or constraint forced a decision |
 | **Decision** | The specific choice made |
 | **Rationale** | Why this option over the alternatives |
-| **Consequences** | Trade-offs accepted — positive and negative |
+| **Consequences** | Trade-offs accepted, positive and negative |
 
 ADRs are immutable once accepted. Superseded decisions get a new ADR that references the old one; the original is kept for historical context.
 

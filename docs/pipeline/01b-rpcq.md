@@ -1,10 +1,10 @@
-# Stage 01b — `s01b_rpcq.py`
+# Stage 01b: `s01b_rpcq.py`
 
 This document explains, function by function, what `s01b_rpcq.py` does, and profiles what the RPCQ
-open data actually contains — including what it does **not** cover.
+open data actually contains, including what it does **not** cover.
 
 Stage 01b is a **parallel ingest path**, not a step inserted into the chain. It never reads the
-Données Montréal corpus. The two sources meet at [stage 04 — Merge](04-merge.md).
+Données Montréal corpus. The two sources meet at [stage 04, Merge](04-merge.md).
 
 ```
 rawData/edifices_patrimoine.csv  → 01 → 02 → 03 ─┐
@@ -15,13 +15,13 @@ rawData/rpcq/*.csv               → 01b ──────────┘
 For why the open data exports come before scraping, see
 [ADR-005](../adr/ADR-005-rpcq-as-secondary-source.md). Scraping never followed:
 [ADR-006](../adr/ADR-006-no-web-scraping.md) makes these exports the only acquisition channel, so
-this stage is not a first step towards a larger source — it is the whole secondary source.
+this stage is not a first step towards a larger source: it is the whole secondary source.
 
 ---
 
 **Input**: `rawData/rpcq/immeubles_classes.csv` and `rawData/rpcq/immeubles_cites.csv`
 (downloaded from Données Québec via `make rpcq-download`)
-**Output**: `data/01b_rpcq/rpcq_raw.parquet` — **179 rows, 25 columns**
+**Output**: `data/01b_rpcq/rpcq_raw.parquet`, **179 rows, 25 columns**
 
 ## What the open data covers
 
@@ -52,7 +52,7 @@ The two exports also disagree on almost everything mechanical:
 | Region number | `no_regn_admin` | `no_region_admin` |
 | Columns | 31 | 26 |
 
-### `run(cfg)` — orchestration
+### `run(cfg)`: orchestration
 
 Loads both exports into one reconciled frame, filters to the Montreal region, hashes, stamps the
 run metadata, validates against `RpcqRawSchema`, and writes Parquet. Every step logs its counts.
@@ -85,8 +85,8 @@ de = "vers 1732" · "après 1806" · "vers 1845" · "après 1769"
 
 ### `_normalize_column_names`
 
-Strips and lowercases. The classés export mixes cases inside a single header row —
-`Wkt_Multipoint_XY` sits next to `nom_bien` — so this is not a no-op.
+Strips and lowercases. The classés export mixes cases inside a single header row
+(`Wkt_Multipoint_XY` sits next to `nom_bien`), so this is not a no-op.
 
 The BOM is handled at read time by `encoding="utf-8-sig"`; without it the first column would be
 named `﻿nom_bien` and every lookup of `nom_bien` would fail.
@@ -113,11 +113,11 @@ The one place the two layouts differ by more than a name. The cités export publ
 MULTIPOINT ((-73.567699 45.514985))   →   longitude = -73.567699, latitude = 45.514985
 ```
 
-**The axis order is X then Y — the first number is the longitude.** Reading it the other way
+**The axis order is X then Y: the first number is the longitude.** Reading it the other way
 round puts every building in Somalia, and the bbox check catches it only as a schema failure,
 never as silently wrong data. This mirrors the `centro_x` / `centro_y` convention of stage 03.
 
-Four of the 621 classés carry several points; the first is kept — it is the position the RPCQ
+Four of the 621 classés carry several points; the first is kept, since it is the position the RPCQ
 itself displays. A published coordinate always wins over the geometry; the WKT only fills gaps.
 
 Both columns come out as `float64`, the single exception to this stage's `dtype=str` rule, and the
@@ -141,7 +141,7 @@ published file), `type_periode_premiere_construction`, and the same photo credit
 Keeps `region_admin == "Montréal"`: 1351 → **179**.
 
 The filter is on the **region**, not the municipality. The Montreal administrative region is the
-whole agglomeration, so filtering on the city name would drop the villes liées — whose buildings
+whole agglomeration, so filtering on the city name would drop the villes liées, whose buildings
 the Données Montréal corpus does contain, and which stage 03 already tags as `ville_liee`:
 
 | municipalite | records |
@@ -155,7 +155,7 @@ the Données Montréal corpus does contain, and which stage 03 already tags as `
 | Baie-D'Urfé | 1 |
 | `Westmount¤Montréal` | 1 |
 
-That last one is not a typo — see *Multi-value fields* below.
+That last one is not a typo: see *Multi-value fields* below.
 
 ### `_add_row_hashes`
 
@@ -194,7 +194,7 @@ the RPCQ covers a building, it covers it well. It just covers few of them.
 
 ### `_validate_schema` / `_write_parquet`
 
-Validates against `RpcqRawSchema` before writing — `bien_id` non-null, `regime_protection` in
+Validates against `RpcqRawSchema` before writing: `bien_id` non-null, `regime_protection` in
 `{classe, cite}`, coordinates inside the Montreal box or null.
 
 `bien_id` is **not** declared unique, by design: four biens legitimately appear twice.
@@ -224,7 +224,7 @@ records:
 adresse = "230 rue Sherbrooke Est¤250 rue Sherbrooke Est¤260 rue Sherbrooke Est"
 ```
 
-Stage 01b **preserves them verbatim** — ingestion does not interpret. Splitting is stage 04's
+Stage 01b **preserves them verbatim**: ingestion does not interpret. Splitting is stage 04's
 problem, and it matters there: a bien spanning four civic numbers has four chances to match a
 Données Montréal address, and the one bien whose `municipalite` reads `Westmount¤Montréal`
 straddles a municipal boundary.
@@ -239,4 +239,4 @@ straddles a municipal boundary.
   matcher; they are not the enrichment.
 - **No typing.** Years stay text (`"vers 1732"`), dates stay text. Only the coordinates are cast.
 
-Next stage: [04 — Merge](04-merge.md).
+Next stage: [04, Merge](04-merge.md).
