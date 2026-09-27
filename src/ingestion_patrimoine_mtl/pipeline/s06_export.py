@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 from loguru import logger
 
@@ -18,6 +20,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     """
     df = _load_source(cfg)
     df = _map_coordinates(df)
+    df = _compose_adresse(df)
     return df
 
 
@@ -44,3 +47,46 @@ def _map_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     df["latitude"] = df["centro_y"]
     df["longitude"] = df["centro_x"]
     return df
+
+
+def _compose_adresse(df: pd.DataFrame) -> pd.DataFrame:
+    """Add adresse, built from civique_min/civique_max rather than the civique column.
+
+    civique holds the source's own pre-formatted display string ("412-414"), but
+    it is less complete than the parsed bounds — 62 records on the merged extract
+    carry a civique_min/civique_max with no civique at all — and it sometimes
+    disagrees with them outright (a civique of "305-307" against a civique_min of
+    301 and civique_max of 305). Rebuilding the range from the bounds is the
+    reliable path; trusting the pre-formatted string is not.
+    """
+    df = df.copy()
+    df["adresse"] = df.apply(_build_adresse, axis=1)
+    return df
+
+
+def _build_adresse(row: pd.Series[Any]) -> str | None:
+    """Compose one address string, or None when the building has no voie at all.
+
+    37 records on the merged extract have neither a voie nor a civique_min —
+    there is nothing to compose, and a partial string built from est_ouest alone
+    would mislead more than an absent field does.
+    """
+    if pd.isna(row["voie"]):
+        return None
+
+    parts: list[str] = []
+    if pd.notna(row["civique_min"]):
+        if row["civique_min"] == row["civique_max"]:
+            parts.append(str(row["civique_min"]))
+        else:
+            parts.append(f"{row['civique_min']}-{row['civique_max']}")
+
+    voie = str(row["voie"])
+    if pd.notna(row["type_de_voie"]):
+        voie = f"{str(row['type_de_voie']).capitalize()} {voie}"
+    parts.append(voie)
+
+    if pd.notna(row["est_ouest"]):
+        parts.append(str(row["est_ouest"]))
+
+    return " ".join(parts)
