@@ -12,6 +12,7 @@ from ingestion_patrimoine_mtl.utils.taxonomy import normalize_typologie
 
 # Filenames of the three artifacts stage 06 writes under cfg.stage_06_out.
 BUILDINGS_GEOJSON_FILENAME = "buildings.geojson"
+BUILDINGS_JSON_FILENAME = "buildings.json"
 
 # BuildingPublic's column set, keyed by the merged-corpus column it comes from.
 # Order is the order of BuildingPublic itself, so a reviewer can read the two
@@ -57,6 +58,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _build_public_frame(df)
 
     _write_json(_build_geojson(df), cfg.stage_06_out / BUILDINGS_GEOJSON_FILENAME)
+    _write_json(_records(df), cfg.stage_06_out / BUILDINGS_JSON_FILENAME)
     return df
 
 
