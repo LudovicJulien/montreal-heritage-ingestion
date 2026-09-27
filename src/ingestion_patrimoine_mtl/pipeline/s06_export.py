@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -7,6 +9,9 @@ from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
 from ingestion_patrimoine_mtl.utils.taxonomy import normalize_typologie
+
+# Filenames of the three artifacts stage 06 writes under cfg.stage_06_out.
+BUILDINGS_GEOJSON_FILENAME = "buildings.geojson"
 
 # BuildingPublic's column set, keyed by the merged-corpus column it comes from.
 # Order is the order of BuildingPublic itself, so a reviewer can read the two
@@ -50,6 +55,8 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _compose_adresse(df)
     df = _add_montreal_url(df)
     df = _build_public_frame(df)
+
+    _write_json(_build_geojson(df), cfg.stage_06_out / BUILDINGS_GEOJSON_FILENAME)
     return df
 
 
@@ -149,3 +156,33 @@ def _build_public_frame(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["typologie"] = df["typologie_specifique"].apply(normalize_typologie)
     return df.rename(columns=_PUBLIC_COLUMNS)[list(_PUBLIC_COLUMNS.values())]
+
+
+def _records(df: pd.DataFrame) -> list[dict[str, Any]]:
+    """Convert a frame to plain dicts with JSON-safe nulls.
+
+    pandas' own missing markers — NaN, pd.NA, NaT — are not valid JSON; ``where``
+    replaces every one of them with ``None`` before the frame ever reaches
+    ``json.dumps``, rather than leaning on a custom encoder to paper over it.
+    """
+    clean = df.astype(object).where(df.notna(), None)
+    return clean.to_dict(orient="records")  # type: ignore[return-value]
+
+
+def _to_feature(record: dict[str, Any]) -> dict[str, Any]:
+    """One GeoJSON Feature per building, geometry null when it has no coordinates."""
+    geometry: dict[str, Any] | None = None
+    if record["latitude"] is not None and record["longitude"] is not None:
+        geometry = {"type": "Point", "coordinates": [record["longitude"], record["latitude"]]}
+    return {"type": "Feature", "geometry": geometry, "properties": record}
+
+
+def _build_geojson(df: pd.DataFrame) -> dict[str, Any]:
+    """Build the buildings.geojson FeatureCollection, one Feature per building."""
+    return {"type": "FeatureCollection", "features": [_to_feature(r) for r in _records(df)]}
+
+
+def _write_json(data: dict[str, Any] | list[Any], path: Path) -> None:
+    """Write data as UTF-8 JSON, creating the parent directory if needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
