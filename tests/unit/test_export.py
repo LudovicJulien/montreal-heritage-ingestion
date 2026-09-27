@@ -7,7 +7,11 @@ import json
 import pytest
 
 from ingestion_patrimoine_mtl.config import Settings
-from ingestion_patrimoine_mtl.pipeline.s06_export import BUILDINGS_GEOJSON_FILENAME, run
+from ingestion_patrimoine_mtl.pipeline.s06_export import (
+    BUILDINGS_GEOJSON_FILENAME,
+    BUILDINGS_JSON_FILENAME,
+    run,
+)
 from ingestion_patrimoine_mtl.utils.geo import is_in_montreal_bbox
 
 
@@ -37,3 +41,18 @@ class TestGeoJson:
             assert feature["type"] == "Feature"
             assert feature["geometry"]["type"] == "Point"
             assert len(feature["geometry"]["coordinates"]) == 2
+
+    def test_record_without_coordinates_excluded_kept_in_buildings_json(
+        self, export_source: Settings
+    ) -> None:
+        """The building with no centro_x/centro_y is absent from the GeoJSON, present in buildings.json."""
+        run(export_source)
+
+        geojson = json.loads((export_source.stage_06_out / BUILDINGS_GEOJSON_FILENAME).read_text())
+        buildings = json.loads((export_source.stage_06_out / BUILDINGS_JSON_FILENAME).read_text())
+
+        geojson_ids = {feature["properties"]["id"] for feature in geojson["features"]}
+        building_ids = {building["id"] for building in buildings}
+
+        assert "0039-28-0003-00" not in geojson_ids
+        assert "0039-28-0003-00" in building_ids
