@@ -79,3 +79,12 @@ class TestStats:
         assert stats["total_buildings"] == len(public)
         assert stats["buildings_with_coordinates"] == int(public["latitude"].notna().sum())
         assert sum(stats["by_arrondissement"].values()) == len(public)
+
+
+class TestRun:
+    def test_run_writes_the_three_artifacts(self, export_source: Settings) -> None:
+        """run() writes buildings.geojson, buildings.json and stats.json under stage_06_out."""
+        run(export_source)
+
+        for filename in (BUILDINGS_GEOJSON_FILENAME, BUILDINGS_JSON_FILENAME, STATS_JSON_FILENAME):
+            assert (export_source.stage_06_out / filename).is_file()
