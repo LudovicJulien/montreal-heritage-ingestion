@@ -13,6 +13,7 @@ from ingestion_patrimoine_mtl.utils.taxonomy import normalize_typologie
 # Filenames of the three artifacts stage 06 writes under cfg.stage_06_out.
 BUILDINGS_GEOJSON_FILENAME = "buildings.geojson"
 BUILDINGS_JSON_FILENAME = "buildings.json"
+STATS_JSON_FILENAME = "stats.json"
 
 # BuildingPublic's column set, keyed by the merged-corpus column it comes from.
 # Order is the order of BuildingPublic itself, so a reviewer can read the two
@@ -59,6 +60,7 @@ def run(cfg: Settings) -> pd.DataFrame:
 
     _write_json(_build_geojson(df), cfg.stage_06_out / BUILDINGS_GEOJSON_FILENAME)
     _write_json(_records(df), cfg.stage_06_out / BUILDINGS_JSON_FILENAME)
+    _write_json(_build_stats(df), cfg.stage_06_out / STATS_JSON_FILENAME)
     return df
 
 
@@ -194,3 +196,26 @@ def _write_json(data: dict[str, Any] | list[Any], path: Path) -> None:
     """Write data as UTF-8 JSON, creating the parent directory if needed."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _build_stats(df: pd.DataFrame) -> dict[str, Any]:
+    """Precompute facet counts so the front-end never recomputes them client-side.
+
+    Only non-null values enter a facet count: a "no data" bucket dressed up as a
+    filterable category is exactly the fabrication ADR-004 rules out for a single
+    field, applied here to a facet instead.
+    """
+    return {
+        "total_buildings": int(len(df)),
+        "buildings_with_coordinates": int(df["latitude"].notna().sum()),
+        "by_arrondissement": _value_counts(df["arrondissement"]),
+        "by_typologie": _value_counts(df["typologie"]),
+        "by_statut_juridique": _value_counts(df["statut_juridique"]),
+    }
+
+
+def _value_counts(series: pd.Series[Any]) -> dict[str, int]:
+    """Count non-null values, sorted by count descending, ties broken alphabetically."""
+    counts = series.dropna().value_counts()
+    ordered = counts.sort_index().sort_values(ascending=False, kind="stable")
+    return {str(label): int(count) for label, count in ordered.items()}
