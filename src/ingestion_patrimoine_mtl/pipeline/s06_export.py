@@ -7,6 +7,12 @@ from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
 
+# The montreal.ca record page for a building, built from its own identifier.
+# ADR-006 forbids fetching this page; constructing the URL and pointing the
+# front-end reader at it is not a fetch, it is a link — the legitimate way to
+# give access to content this pipeline does not copy.
+MONTREAL_URL_TEMPLATE = "https://montreal.ca/repertoire-patrimoine-bati/batiments-patrimoniaux/{id}"
+
 
 def run(cfg: Settings) -> pd.DataFrame:
     """Shape the merged corpus into the flat record the front-end reads.
@@ -21,6 +27,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _load_source(cfg)
     df = _map_coordinates(df)
     df = _compose_adresse(df)
+    df = _add_montreal_url(df)
     return df
 
 
@@ -90,3 +97,17 @@ def _build_adresse(row: pd.Series[Any]) -> str | None:
         parts.append(str(row["est_ouest"]))
 
     return " ".join(parts)
+
+
+def _add_montreal_url(df: pd.DataFrame) -> pd.DataFrame:
+    """Build the montreal.ca record URL from identifiant_batiment — a link, never a fetch.
+
+    Always non-null: stage 03 already rejects the one row of the corpus that
+    lacks an identifiant_batiment, so every surviving record has one to build
+    the URL from.
+    """
+    df = df.copy()
+    df["url_montreal"] = df["identifiant_batiment"].map(
+        lambda identifier: MONTREAL_URL_TEMPLATE.format(id=identifier)
+    )
+    return df
