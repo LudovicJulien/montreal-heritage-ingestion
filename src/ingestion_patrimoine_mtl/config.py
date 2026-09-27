@@ -87,5 +87,15 @@ class Settings(BaseSettings):
     def stage_05_out(self) -> Path:
         return self.data_dir / "05_enriched" / "buildings_enriched.jsonl"
 
+    @property
+    def stage_06_out(self) -> Path:
+        """Directory holding the three front-end artifacts (stage 06 · Export).
+
+        A directory rather than a single file: stage 06 writes buildings.geojson,
+        buildings.json and stats.json side by side, and the front-end fetches all
+        three as static files.
+        """
+        return self.data_dir / "06_export"
+
 
 settings = Settings()
