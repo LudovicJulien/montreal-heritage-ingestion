@@ -51,12 +51,11 @@ class TestNormalizeTypologie:
 
         result = _normalize_typologie(df)
 
-        assert result["typologie_normalisee"].tolist() == [
-            "école",
-            None,
-            "édifice religieux",
-            "édifice religieux",
-        ]
+        normalized = result["typologie_normalisee"]
+        assert normalized.iloc[0] == "école"
+        assert pd.isna(normalized.iloc[1])
+        assert normalized.iloc[2] == "édifice religieux"
+        assert normalized.iloc[3] == "édifice religieux"
 
     def test_null_typologie_specifique_stays_null(self) -> None:
         """A missing typologie_specifique produces a missing typologie_normalisee, not a crash."""
@@ -64,7 +63,7 @@ class TestNormalizeTypologie:
 
         result = _normalize_typologie(df)
 
-        assert result["typologie_normalisee"].iloc[0] is None
+        assert pd.isna(result["typologie_normalisee"].iloc[0])
 
     def test_unmapped_value_logs_once_at_warning(self, captured_warnings: list[str]) -> None:
         """A raw value TYPOLOGIE_MAPPING has never seen is logged once, not once per row."""
