@@ -172,16 +172,22 @@ def _records(df: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def _to_feature(record: dict[str, Any]) -> dict[str, Any]:
-    """One GeoJSON Feature per building, geometry null when it has no coordinates."""
-    geometry: dict[str, Any] | None = None
-    if record["latitude"] is not None and record["longitude"] is not None:
-        geometry = {"type": "Point", "coordinates": [record["longitude"], record["latitude"]]}
+    """One GeoJSON Feature for a building with known coordinates."""
+    geometry = {"type": "Point", "coordinates": [record["longitude"], record["latitude"]]}
     return {"type": "Feature", "geometry": geometry, "properties": record}
 
 
 def _build_geojson(df: pd.DataFrame) -> dict[str, Any]:
-    """Build the buildings.geojson FeatureCollection, one Feature per building."""
-    return {"type": "FeatureCollection", "features": [_to_feature(r) for r in _records(df)]}
+    """Build buildings.geojson over the records with coordinates only.
+
+    59 of 1335 buildings on the merged extract carry no centro_x/centro_y — the
+    map cannot place them, and a null-geometry Feature is valid GeoJSON but
+    useless to a map layer, so they are excluded here rather than passed
+    through. They stay in buildings.json: the list and detail views do not need
+    a position to render.
+    """
+    located = df[df["latitude"].notna() & df["longitude"].notna()]
+    return {"type": "FeatureCollection", "features": [_to_feature(r) for r in _records(located)]}
 
 
 def _write_json(data: dict[str, Any] | list[Any], path: Path) -> None:
