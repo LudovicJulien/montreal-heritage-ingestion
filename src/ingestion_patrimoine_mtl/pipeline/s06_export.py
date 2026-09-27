@@ -6,6 +6,27 @@ import pandas as pd
 from loguru import logger
 
 from ingestion_patrimoine_mtl.config import Settings
+from ingestion_patrimoine_mtl.utils.taxonomy import normalize_typologie
+
+# BuildingPublic's column set, keyed by the merged-corpus column it comes from.
+# Order is the order of BuildingPublic itself, so a reviewer can read the two
+# side by side.
+_PUBLIC_COLUMNS = {
+    "identifiant_batiment": "id",
+    "nom_historique": "nom_historique",
+    "typologie": "typologie",
+    "adresse": "adresse",
+    "arrondissement": "arrondissement",
+    "latitude": "latitude",
+    "longitude": "longitude",
+    "debut_des_travaux": "debut_travaux",
+    "fin_des_travaux": "fin_travaux",
+    "historique_sommaire": "historique_sommaire",
+    "statut_juridique": "statut_juridique",
+    "url_montreal": "url_montreal",
+    "url_rpcq": "url_rpcq",
+    "url_photo": "url_photo",
+}
 
 # The montreal.ca record page for a building, built from its own identifier.
 # ADR-006 forbids fetching this page; constructing the URL and pointing the
@@ -28,6 +49,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     df = _map_coordinates(df)
     df = _compose_adresse(df)
     df = _add_montreal_url(df)
+    df = _build_public_frame(df)
     return df
 
 
@@ -111,3 +133,19 @@ def _add_montreal_url(df: pd.DataFrame) -> pd.DataFrame:
         lambda identifier: MONTREAL_URL_TEMPLATE.format(id=identifier)
     )
     return df
+
+
+def _build_public_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Reduce the merged corpus to the BuildingPublic column set.
+
+    typologie is added here through normalize_typologie (utils.taxonomy) — the
+    same controlled vocabulary feat/05a-taxonomy already applies — rather than
+    exposing the raw 42-value typologie_specifique or waiting on stage 05's
+    run(), which the NER it was built for still leaves unimplemented.
+    url_rpcq and url_photo carry straight through: they are the only outbound
+    link and the only visual the corpus has, already null for every building
+    the RPCQ exports do not cover (ADR-005).
+    """
+    df = df.copy()
+    df["typologie"] = df["typologie_specifique"].apply(normalize_typologie)
+    return df.rename(columns=_PUBLIC_COLUMNS)[list(_PUBLIC_COLUMNS.values())]
