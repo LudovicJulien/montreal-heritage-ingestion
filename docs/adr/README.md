@@ -25,3 +25,4 @@ ADRs are immutable once accepted. Superseded decisions get a new ADR that refere
 | [ADR-004](ADR-004-data-quality-policy.md) | Data Quality Policy — Reject, Nullify, or Normalize | Accepted |
 | [ADR-005](ADR-005-rpcq-as-secondary-source.md) | RPCQ as a Secondary Source — Open Data Export Before Scraping | Accepted |
 | [ADR-006](ADR-006-no-web-scraping.md) | No Web Scraping — Open Data Exports Are the Only Acquisition Channel | Accepted |
+| [ADR-007](ADR-007-export-provenance-and-determinism.md) | Export Provenance Fields and a Deterministic exported_at | Accepted |

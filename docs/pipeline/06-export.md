@@ -98,7 +98,8 @@ which the list and detail views read without needing a position.
 
 Precomputes `total_buildings`, `buildings_with_coordinates`, and three facets:
 `by_arrondissement`, `by_decade` (via `_decade_histogram`), `by_typologie` and
-`by_statut_juridique` (via `_value_counts`). Only non-null values enter a facet count. A "no data"
+`by_statut_juridique` (via `_value_counts`), then the provenance keys `source_updated_at` and
+`exported_at` (see [ADR-007](../adr/ADR-007-export-provenance-and-determinism.md)). Only non-null values enter a facet count. A "no data"
 bucket dressed up as a filterable category is the same fabrication ADR-004 rules out for a single
 field, applied here to a facet instead.
 

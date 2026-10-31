@@ -124,6 +124,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | [ADR-004](docs/adr/ADR-004-data-quality-policy.md) | When to reject a row, nullify a field, or normalize a value |
 | [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md) | Why the RPCQ open data exports come before scraping |
 | [ADR-006](docs/adr/ADR-006-no-web-scraping.md) | Why open data exports are the only acquisition channel, no scraping |
+| [ADR-007](docs/adr/ADR-007-export-provenance-and-determinism.md) | Provenance fields in stats.json and a deterministic exported_at |
 
 ### Stage-by-Stage Documentation
 
