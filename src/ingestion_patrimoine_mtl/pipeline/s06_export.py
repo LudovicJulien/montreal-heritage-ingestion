@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,7 @@ def run(cfg: Settings) -> pd.DataFrame:
     NER run() produces.
     """
     df = _load_source(cfg)
+    exported_at = _derive_exported_at(df)  # before the public frame drops ingested_at
     df = _map_coordinates(df)
     df = _compose_adresse(df)
     df = _add_montreal_url(df)
@@ -64,7 +66,10 @@ def run(cfg: Settings) -> pd.DataFrame:
     geojson = _build_geojson(df)
     _write_json(geojson, cfg.stage_06_out / BUILDINGS_GEOJSON_FILENAME)
     _write_json(_records(df), cfg.stage_06_out / BUILDINGS_JSON_FILENAME)
-    _write_json(_build_stats(df), cfg.stage_06_out / STATS_JSON_FILENAME)
+    _write_json(
+        _build_stats(df, _read_source_updated_at(cfg.source_metadata_path), exported_at),
+        cfg.stage_06_out / STATS_JSON_FILENAME,
+    )
 
     _log_export_report(df, geojson, cfg)
     return df
@@ -204,12 +209,18 @@ def _write_json(data: dict[str, Any] | list[Any], path: Path) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _build_stats(df: pd.DataFrame) -> dict[str, Any]:
+def _build_stats(
+    df: pd.DataFrame, source_updated_at: str | None, exported_at: str | None
+) -> dict[str, Any]:
     """Precompute facet counts so the front-end never recomputes them client-side.
 
     Only non-null values enter a facet count: a "no data" bucket dressed up as a
     filterable category is exactly the fabrication ADR-004 rules out for a single
     field, applied here to a facet instead.
+
+    source_updated_at and exported_at are provenance fields, appended after the
+    facets so the existing keys keep their place. Both are null when unknown
+    (ADR-007).
     """
     return {
         "total_buildings": int(len(df)),
@@ -218,7 +229,45 @@ def _build_stats(df: pd.DataFrame) -> dict[str, Any]:
         "by_decade": _decade_histogram(df["debut_travaux"]),
         "by_typologie": _value_counts(df["typologie"]),
         "by_statut_juridique": _value_counts(df["statut_juridique"]),
+        "source_updated_at": source_updated_at,
+        "exported_at": exported_at,
     }
+
+
+def _format_utc(moment: datetime) -> str:
+    """Format a datetime as ISO 8601 UTC with second precision; naive means UTC."""
+    aware = moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment.astimezone(UTC)
+    return aware.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _read_source_updated_at(path: Path) -> str | None:
+    """Read the portal's last-modified date from the download sidecar, or None.
+
+    Absent file, unreadable JSON, missing key or unparsable date all give None
+    with a warning: a missing freshness date must not fail the export, and a
+    guessed one would be worse than none.
+    """
+    if not path.is_file():
+        logger.warning("No source metadata at {path}, source_updated_at is null", path=path)
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))["source_updated_at"]
+        return None if raw is None else _format_utc(datetime.fromisoformat(str(raw)))
+    except (ValueError, KeyError, TypeError):
+        logger.warning("Unusable source metadata at {path}, source_updated_at is null", path=path)
+        return None
+
+
+def _derive_exported_at(df: pd.DataFrame) -> str | None:
+    """Return the latest ingested_at of the corpus, not the wall clock (ADR-007).
+
+    ingested_at is stamped by stage 01 and carried through DVC-tracked parquet, so
+    the value only changes when the data does. A now() here would rewrite
+    stats.json on every run and invalidate the DVC cache.
+    """
+    if "ingested_at" not in df.columns or df["ingested_at"].isna().all():
+        return None
+    return _format_utc(pd.Timestamp(df["ingested_at"].max()).to_pydatetime())
 
 
 def _value_counts(series: pd.Series[Any]) -> dict[str, int]:

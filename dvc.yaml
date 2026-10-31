@@ -61,6 +61,7 @@ stages:
     cmd: python -m ingestion_patrimoine_mtl --stage 06
     deps:
       - data/04_merged/buildings_merged.parquet
+      - rawData/source_metadata.json
       - src/ingestion_patrimoine_mtl/config.py
       - src/ingestion_patrimoine_mtl/utils/taxonomy.py
       - src/ingestion_patrimoine_mtl/pipeline/s06_export.py

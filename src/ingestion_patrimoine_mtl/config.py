@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     raw_data_dir: Path = Field(default=Path("rawData"))
     data_dir: Path = Field(default=Path("data"))
     source_file: str = Field(default="edifices_patrimoine.csv")
+    # Sidecar written by `make download`: the portal's own last-modified date for the
+    # source resource. Read by stage 06 for stats.json's source_updated_at.
+    source_metadata_file: str = Field(default="source_metadata.json")
     # RPCQ open data exports (stage 01b), published as two separate Données Québec
     # resources: immeubles classés by the ministry, immeubles cités by municipalities.
     rpcq_subdir: str = Field(default="rpcq")
@@ -29,6 +32,10 @@ class Settings(BaseSettings):
     @property
     def source_path(self) -> Path:
         return self.raw_data_dir / self.source_file
+
+    @property
+    def source_metadata_path(self) -> Path:
+        return self.raw_data_dir / self.source_metadata_file
 
     @property
     def rpcq_source_dir(self) -> Path:
