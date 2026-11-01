@@ -58,11 +58,15 @@ _QUOTED_TEXT_RE = re.compile(r'"([^"]+)"')
 def _strip_html(text: str | None) -> str | None:
     """Extract plain text from an HTML string using BeautifulSoup.
 
+    Any non-string input (None, np.nan, pd.NA) gives None. Which null sentinel a
+    Parquet read returns depends on the pandas version, so an identity check
+    against None is not enough.
+
     <sup> and <sub> are stripped via regex before BeautifulSoup parsing so that
     their content is inlined without a separator (e.g. M<sup>e</sup> → "Me",
     not "M e"). Block-level tags still get the space separator from get_text().
     """
-    if text is None:
+    if not isinstance(text, str):
         return None
     inlined = _INLINE_TAG_RE.sub(r"\1", text)
     plain = BeautifulSoup(inlined, "html.parser").get_text(" ")
@@ -87,7 +91,7 @@ def _normalize_french_typography(text: str | None) -> str | None:
     single quotation mark (U+2019), and converts ASCII double-quoted spans into
     French guillemets with non-breaking spaces (U+00A0).
     """
-    if text is None:
+    if not isinstance(text, str):
         return None
     text = text.replace("'", "’")
     text = _QUOTED_TEXT_RE.sub("« \\1 »", text)
@@ -96,7 +100,7 @@ def _normalize_french_typography(text: str | None) -> str | None:
 
 def _collapse_whitespace(text: str | None) -> str | None:
     """Collapse multiple spaces and line breaks into a single space."""
-    if text is None:
+    if not isinstance(text, str):
         return None
     return re.sub(r"\s+", " ", text).strip()
 

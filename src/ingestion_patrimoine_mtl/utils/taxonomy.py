@@ -65,6 +65,6 @@ def normalize_typologie(raw: str | None) -> str | None:
     returned unchanged rather than dropped — the mapping is built from one
     extract, and a value it has never seen should surface, not disappear.
     """
-    if raw is None:
+    if not isinstance(raw, str):
         return None
     return TYPOLOGIE_MAPPING.get(raw.casefold(), raw)

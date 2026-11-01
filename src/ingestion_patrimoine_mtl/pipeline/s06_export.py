@@ -111,7 +111,7 @@ def _compose_adresse(df: pd.DataFrame) -> pd.DataFrame:
     reliable path; trusting the pre-formatted string is not.
     """
     df = df.copy()
-    df["adresse"] = df.apply(_build_adresse, axis=1)
+    df["adresse"] = [_build_adresse(row) for _, row in df.iterrows()]
     return df
 
 
