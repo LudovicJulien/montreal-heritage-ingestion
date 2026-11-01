@@ -313,8 +313,11 @@ def _name_similarity(one: str | None, other: str | None) -> float:
     A missing name is not a weak signal, it is the absence of one: returning 0.0
     rather than skipping the component keeps such a pair below the threshold
     instead of letting the distance carry it alone.
+
+    Series.map turns a None value into NaN on recent pandas, so the guard checks
+    for a non-empty string rather than for falsiness: NaN is truthy.
     """
-    if not one or not other:
+    if not isinstance(one, str) or not isinstance(other, str) or not one or not other:
         return 0.0
     return SequenceMatcher(None, one, other).ratio()
 
