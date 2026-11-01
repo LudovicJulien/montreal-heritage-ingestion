@@ -17,18 +17,25 @@ class Settings(BaseSettings):
     raw_data_dir: Path = Field(default=Path("rawData"))
     data_dir: Path = Field(default=Path("data"))
     source_file: str = Field(default="edifices_patrimoine.csv")
+    # Sidecar written by `make download`: the portal's own last-modified date for the
+    # source resource. Read by stage 06 for stats.json's source_updated_at.
+    source_metadata_file: str = Field(default="source_metadata.json")
     # RPCQ open data exports (stage 01b), published as two separate Données Québec
     # resources: immeubles classés by the ministry, immeubles cités by municipalities.
     rpcq_subdir: str = Field(default="rpcq")
     rpcq_classes_file: str = Field(default="immeubles_classes.csv")
     rpcq_cites_file: str = Field(default="immeubles_cites.csv")
-    pipeline_version: str = Field(default="0.5.0")
+    pipeline_version: str = Field(default="0.6.0")
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="dev")  # "dev" | "json"
 
     @property
     def source_path(self) -> Path:
         return self.raw_data_dir / self.source_file
+
+    @property
+    def source_metadata_path(self) -> Path:
+        return self.raw_data_dir / self.source_metadata_file
 
     @property
     def rpcq_source_dir(self) -> Path:
@@ -86,6 +93,16 @@ class Settings(BaseSettings):
     @property
     def stage_05_out(self) -> Path:
         return self.data_dir / "05_enriched" / "buildings_enriched.jsonl"
+
+    @property
+    def stage_06_out(self) -> Path:
+        """Directory holding the three front-end artifacts (stage 06 · Export).
+
+        A directory rather than a single file: stage 06 writes buildings.geojson,
+        buildings.json and stats.json side by side, and the front-end fetches all
+        three as static files.
+        """
+        return self.data_dir / "06_export"
 
 
 settings = Settings()

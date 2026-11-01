@@ -1,0 +1,109 @@
+name: Release data
+
+# Rebuilds the three front-end artifacts from the open data sources and publishes them as a
+# GitHub Release. The data never enters Git. See ADR-007 for the fields in stats.json.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, e.g. data-2026-10-31. Defaults to data-<UTC date>."
+        required: false
+        type: string
+  push:
+    tags: ["data-*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build artifacts
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            version="$REF_NAME"
+          elif [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="data-$(date -u +%F)"
+          fi
+          case "$version" in
+            data-*) ;;
+            *) echo "Version must start with data-: $version" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # No DVC remote is configured for the project (ADR-002, per-contributor local remotes),
+      # so the pipeline is rebuilt from the open data exports. They need no credentials.
+      - name: Download open data sources
+        run: |
+          make download
+          make rpcq-download
+
+      - name: Run the pipeline
+        run: dvc repro
+
+      - name: Checksum
+        working-directory: data/06_export
+        run: sha256sum buildings.json buildings.geojson stats.json > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: data-release
+          if-no-files-found: error
+          path: |
+            data/06_export/buildings.json
+            data/06_export/buildings.geojson
+            data/06_export/stats.json
+            data/06_export/SHA256SUMS
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: data-release
+          path: release
+
+      - name: Verify checksums
+        working-directory: release
+        run: sha256sum --check SHA256SUMS
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            release/buildings.json release/buildings.geojson release/stats.json release/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$VERSION" \
+            --notes "Montreal heritage buildings dataset, built from the commit $GITHUB_SHA. Verify with sha256sum --check SHA256SUMS."

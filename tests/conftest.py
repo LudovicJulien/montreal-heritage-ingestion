@@ -421,3 +421,62 @@ def merge_sources(
         path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_parquet(path, compression="snappy", index=False)
     return cfg
+
+
+@pytest.fixture
+def sample_merged_df() -> pd.DataFrame:
+    """Five records in stage 04 output layout, one per stage 06 export case.
+
+    Row 0 has a civique range, an est_ouest suffix and an RPCQ match. Row 1 has a
+    single civique (min == max) and no RPCQ match. Row 2 has no voie at all, so
+    adresse must be null. Row 3 carries the "non applicable" sentinel, so
+    typologie must be null after the taxonomy mapping. Row 4 has no coordinates
+    and must be excluded from the GeoJSON while staying in buildings.json.
+    """
+    return pd.DataFrame(
+        {
+            "identifiant_batiment": [
+                "0039-27-4599-00",
+                "0039-27-5992-00",
+                "0039-28-0001-00",
+                "0039-28-0002-00",
+                "0039-28-0003-00",
+            ],
+            "nom_historique": [
+                "Maison Hurtubise",
+                "Édifice Aldred",
+                "Maison sans adresse",
+                "Bâtiment indéterminé",
+                "Banque de Montréal",
+            ],
+            "typologie_specifique": [
+                "École",
+                "Maison isolée",
+                "Gratte-ciel",
+                "non applicable",
+                "Banque",
+            ],
+            "civique_min": ["412", "404", None, "10", "20"],
+            "civique_max": ["414", "404", None, "10", "20"],
+            "type_de_voie": ["rue", "avenue", None, "rue", "rue"],
+            "voie": ["McGill", "Laurier", None, "Saint-Jacques", "Peel"],
+            "est_ouest": ["Ouest", None, None, None, None],
+            "arrondissement": ["Ville-Marie"] * 5,
+            "historique_sommaire": ["Texte historique.", None, None, None, None],
+            "debut_des_travaux": pd.array([1925, 1900, 1950, 1975, 1889], dtype="Int64"),
+            "fin_des_travaux": pd.array([1927, None, None, None, None], dtype="Int64"),
+            "centro_x": [-73.5679, -73.5800, -73.5600, -73.5500, None],
+            "centro_y": [45.5017, 45.5100, 45.4900, 45.4800, None],
+            "statut_juridique": ["Classement", None, None, None, "Citation"],
+            "url_rpcq": ["http://rpcq.test/1", None, None, None, "http://rpcq.test/5"],
+            "url_photo": ["http://rpcq.test/1.jpg", None, None, None, None],
+        }
+    )
+
+
+@pytest.fixture
+def export_source(cfg: Settings, sample_merged_df: pd.DataFrame) -> Settings:
+    """Write the stage 04 fixture at its configured path, stage 06's only input."""
+    cfg.stage_04_out.parent.mkdir(parents=True, exist_ok=True)
+    sample_merged_df.to_parquet(cfg.stage_04_out, compression="snappy", index=False)
+    return cfg

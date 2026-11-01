@@ -7,7 +7,7 @@ This pipeline ingests the **1,336 heritage buildings** published by [Données Mo
 > The source file counts 1,336 records over 2,743 physical lines: 272 buildings carry a multi-paragraph `HISTORIQUE_SOMMAIRE` with embedded newlines. Line counts are not record counts here; see [03-normalize.md](docs/pipeline/03-normalize.md).
 
 ![CI](https://github.com/LudovicJulien/montreal-heritage-ingestion/actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-0.5.0-brightgreen)
+![Version](https://img.shields.io/badge/version-0.6.0-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![DVC](https://img.shields.io/badge/DVC-3.50+-purple)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
@@ -124,6 +124,7 @@ The key design choices are documented as ADRs in [`docs/adr/`](docs/adr/):
 | [ADR-004](docs/adr/ADR-004-data-quality-policy.md) | When to reject a row, nullify a field, or normalize a value |
 | [ADR-005](docs/adr/ADR-005-rpcq-as-secondary-source.md) | Why the RPCQ open data exports come before scraping |
 | [ADR-006](docs/adr/ADR-006-no-web-scraping.md) | Why open data exports are the only acquisition channel, no scraping |
+| [ADR-007](docs/adr/ADR-007-export-provenance-and-determinism.md) | Provenance fields in stats.json and a deterministic exported_at |
 
 ### Stage-by-Stage Documentation
 
@@ -185,7 +186,7 @@ maps onto today.
   },
   "record_hash": "a3f2c1...",
   "ingested_at": "2026-06-09T14:00:00Z",
-  "pipeline_version": "0.5.0"
+  "pipeline_version": "0.6.0"
 }
 ```
 
@@ -285,7 +286,7 @@ cp .env.example .env
 | `INGESTION_RAW_DATA_DIR` | `rawData` | Source CSV directory |
 | `INGESTION_SOURCE_FILE` | `edifices_patrimoine.csv` | Source CSV filename |
 | `INGESTION_DATA_DIR` | `data` | Pipeline output root |
-| `INGESTION_PIPELINE_VERSION` | `0.5.0` | Version stamped on every ingested row |
+| `INGESTION_PIPELINE_VERSION` | `0.6.0` | Version stamped on every ingested row |
 | `INGESTION_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `INGESTION_LOG_FORMAT` | `dev` | `dev` (colored) or `json` (structured, for CI/prod) |
 
